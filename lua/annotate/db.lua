@@ -36,8 +36,17 @@ function M.get_annot(buf_path, extmark_ln)
     return annot_txt
 end
 
-function M.get_all_buf()
-
+function M.get_all_annot(buf_path)
+    local annots = annots_tbl:get({
+        select = {
+            'buf_full_path',
+            'extmark_row'
+        },
+        where = {
+            buf_full_path = buf_path
+        }
+    })
+    return annots
 end
 
 -- handle the parsing/formatting of the text

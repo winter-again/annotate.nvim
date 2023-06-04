@@ -7,7 +7,6 @@ function M.list_annotations()
     P(marks)
 end
 
-
 local create_annot_buf = function(cursor_ln)
     local bufnr = vim.api.nvim_create_buf(false, true) -- unlisted scratch-buffer
     -- vim.api.nvim_set_option_value('wrap', true, {buf=bufnr})
@@ -42,8 +41,22 @@ local function send_annot(parent_buf_path, annot_buf, cursor_ln)
     db.create_annot(parent_buf_path, cursor_ln, buf_txt)
 end
 
+function M.set_annotations()
+    local buf_path = vim.api.nvim_buf_get_name(0)
+    local ns = vim.api.nvim_create_namespace('annotate')
+    local opts = {
+        sign_text='󰍕'
+    }
+    local extmark_tbl = db.get_all_annot(buf_path)
+    for _, row in ipairs(extmark_tbl) do
+        vim.api.nvim_buf_set_extmark(0, ns, row['extmark_row'], 0, opts)
+        -- P(value)
+    end
+    print('Existing extmarks set')
+end
+
 -- TODO: put the floating window stuff in a helper func if it can be used elsewhere
-function M.set_annotation()
+function M.create_annotation()
     local buf_path = vim.api.nvim_buf_get_name(0) -- should be the buf containing the extmark
     local cursor_ln = vim.api.nvim_win_get_cursor(0)[1] - 1 -- 1-based lines conv to 0-based for extmarks
     local ns = vim.api.nvim_create_namespace('annotate')
