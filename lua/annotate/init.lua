@@ -78,9 +78,12 @@ function M.set_annotations()
 end
 
 function M.create_annotation()
-    local extmark_parent_buf = vim.api.nvim_get_current_buf()
+    local extmark_parent_win = vim.api.nvim_get_current_win()
+    -- TODO: is one of these clearly favorable?
+    -- local extmark_parent_buf = vim.api.nvim_get_current_buf()
+    local extmark_parent_buf = vim.api.nvim_win_get_buf(extmark_parent_win)
     local parent_buf_path = vim.api.nvim_buf_get_name(extmark_parent_buf)
-    local cursor_ln = vim.api.nvim_win_get_cursor(extmark_parent_buf)[1] - 1 -- 1-based lines conv to 0-based for extmarks
+    local cursor_ln = vim.api.nvim_win_get_cursor(extmark_parent_win)[1] - 1 -- 1-based lines conv to 0-based for extmarks
     local ns = vim.api.nvim_create_namespace('annotate')
     local opts = {
         sign_text='󰍕'
@@ -120,7 +123,7 @@ function M.create_annotation()
         -- TODO: prob better to track that buffer has been modified AND left insert mode
         vim.api.nvim_create_autocmd('InsertLeave', {
             callback=function()
-                local empty_lines = check_annot_buf_empty()
+                local empty_lines = check_annot_buf_empty(annot_buf)
                 if empty_lines then
                     -- TODO: instead of denying, ask whether annotation should be deleted instead
                     print('Annotation is empty')
@@ -136,14 +139,18 @@ function M.create_annotation()
 end
 
 function M.delete_annotation()
-    local extmark_parent_buf = vim.api.nvim_get_current_buf()
+    local extmark_parent_win = vim.api.nvim_get_current_win()
+    -- TODO: same here, is  one better?
+    -- local extmark_parent_buf = vim.api.nvim_get_current_buf()
+    local extmark_parent_buf = vim.api.nvim_win_get_buf(extmark_parent_win)
     local parent_buf_path = vim.api.nvim_buf_get_name(extmark_parent_buf)
-    local cursor_ln = vim.api.nvim_win_get_cursor(extmark_parent_buf)[1] - 1
+    local cursor_ln = vim.api.nvim_win_get_cursor(extmark_parent_win)[1] - 1
     local ns = vim.api.nvim_create_namespace('annotate')
     local existing_extmarks = vim.api.nvim_buf_get_extmarks(extmark_parent_buf, ns, {cursor_ln, 0}, {cursor_ln, 0}, {})
     if next(existing_extmarks) == nil then
         print('No existing extmark here')
     else
+        -- TODO: also display the annotation so user can determine if they want to delete it?
         local confirm = vim.fn.input('Are you sure you want to delete this annotation? (y/n): ')
         if confirm:lower() == 'y' then
             local mark_id = existing_extmarks[1][1]
