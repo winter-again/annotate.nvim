@@ -1,6 +1,3 @@
-local async = require('plenary.async')
--- local tx, rx = async.control.channel.oneshot()
--- local channel = require('plenary.async.control.channel')
 local db = require('annotate.db')
 local M = {}
 
@@ -10,30 +7,50 @@ function M.list_annotations()
     P(marks)
 end
 
--- TODO: make this reuse a single scratch buffer?
--- and just return that one so it can be thrown around for use
+-- TODO: could pass window opts here for config
+-- TODO: check for existing scratch buffer dedicated to annots
+-- or can we check if the window containing it exists (despite potentially being hidden by a :close)
+-- use vim.api.nvim_buf_is_loaded({buffer})?
+-- using vim.fn.bufexists(name_of_the_buf) returns 0 if it doesn't exist and 1 if it does
+-- using vim.fn.bufnr(name_of_the_buf) returns -1 if it doesn't exist and then the buffer handle (I think) if it does
 local function create_annot_buf(cursor_ln)
-    local extmark_parent_win = vim.api.nvim_get_current_win()
-    local win_width = vim.api.nvim_win_get_width(extmark_parent_win)
+    local annot_buf_name = 'Annotation'
+    -- local annot_buf_exists_1 = vim.fn.bufexists(annot_buf_name)
+    local annot_buf_exists_1 = vim.fn.bufnr(annot_buf_name)
     local annot_buf = vim.api.nvim_create_buf(false, true) -- unlisted scratch-buffer
-    local padding = 2
-    -- TODO: tune these settings or make them configurable
-    -- TODO: consider wrapping behavior? setting a fixed textwidth?
-    local annot_win = vim.api.nvim_open_win(annot_buf, true, {
-        relative = 'win',
-        win = extmark_parent_win,
-        anchor = 'NE',
-        row = cursor_ln - 1,
-        col = win_width - padding,
-        width = 25,
-        height = 20,
-        border = 'rounded',
-        style = 'minimal',
-        title = 'Annotation',
-        title_pos = 'center'
-    })
-    vim.api.nvim_buf_set_keymap(annot_buf, 'n', 'q', ':close<CR>', {noremap=true, silent=true, nowait=true})
-    return annot_buf, annot_win
+    vim.api.nvim_buf_set_name(annot_buf, annot_buf_name)
+    -- local annot_buf_exists_2 = vim.fn.bufexists(annot_buf_name)
+    local annot_buf_exists_2 = vim.fn.bufnr(annot_buf_name)
+    -- local annot_win
+    print(annot_buf_exists_1, annot_buf_exists_2)
+    -- if vim.api.nvim_buf_is_loaded()
+    --     local extmark_parent_win = vim.api.nvim_get_current_win()
+    --     local win_width = vim.api.nvim_win_get_width(extmark_parent_win)
+    --     annot_buf = vim.api.nvim_create_buf(false, true) -- unlisted scratch-buffer
+    --     vim.api.nvim_buf_set_name(annot_buf, annot_buf_name)
+    --     local padding = 2
+    --     -- TODO: consider wrapping behavior? setting a fixed textwidth?
+    --     annot_win = vim.api.nvim_open_win(annot_buf, true, {
+    --         relative = 'win',
+    --         win = extmark_parent_win,
+    --         anchor = 'NE',
+    --         row = cursor_ln - 1,
+    --         col = win_width - padding,
+    --         width = 25,
+    --         height = 20,
+    --         border = 'rounded',
+    --         style = 'minimal',
+    --         title = 'Annotation',
+    --         title_pos = 'center'
+    --     })
+    --     vim.api.nvim_buf_set_keymap(annot_buf, 'n', 'q', ':close<CR>', {noremap=true, silent=true, nowait=true})
+    --     print('Existing buffer + window didn\'t exist so created them')
+    -- else
+    --     annot_buf = vim.fn.bufnr(annot_buf_name)
+    --     annot_win = vim.fn.bufwinid(annot_buf)
+    --     print('Fetched existing buffer + window')
+    -- end
+    -- return annot_buf, annot_win
 end
 
 -- TODO: test this gmatch better
@@ -192,7 +209,6 @@ function M.delete_annotation()
                 -- TODO: should this be a window deletion instead?
                 vim.api.nvim_win_hide(annot_win)
             else
-                vim.cmd('redraw')
                 print('Annotation NOT deleted')
             end
         end)
