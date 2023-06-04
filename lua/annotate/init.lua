@@ -44,18 +44,24 @@ end
 function M.set_annotations()
     local buf_path = vim.api.nvim_buf_get_name(0)
     local ns = vim.api.nvim_create_namespace('annotate')
-    local opts = {
-        sign_text='󰍕'
-    }
-    local extmark_tbl = db.get_all_annot(buf_path)
-    for _, row in ipairs(extmark_tbl) do
-        vim.api.nvim_buf_set_extmark(0, ns, row['extmark_row'], 0, opts)
-        -- P(value)
+    local existing_extmark = vim.api.nvim_buf_get_extmarks(0, ns, 0, -1, {})
+    if next(existing_extmark) == nil then
+        local opts = {
+            sign_text='󰍕'
+        }
+        local extmark_tbl = db.get_all_annot(buf_path)
+        for _, row in ipairs(extmark_tbl) do
+            vim.api.nvim_buf_set_extmark(0, ns, row['extmark_row'], 0, opts)
+            -- P(value)
+        end
+        print('Existing extmarks set')
+    else
+        -- TODO: is this good enough?
+        print('Extmarks already set')
     end
-    print('Existing extmarks set')
 end
 
--- TODO: put the floating window stuff in a helper func if it can be used elsewhere
+-- used to set new annotation OR get existing annotation
 function M.create_annotation()
     local buf_path = vim.api.nvim_buf_get_name(0) -- should be the buf containing the extmark
     local cursor_ln = vim.api.nvim_win_get_cursor(0)[1] - 1 -- 1-based lines conv to 0-based for extmarks
@@ -78,6 +84,7 @@ function M.create_annotation()
             buffer=bufnr
         })
     else
+        -- get existing annotation
         -- mark_id = existing_extmark[1][1]
         local annot_txt = db.get_annot(buf_path, cursor_ln)[1]['text']
         local annot_lines = {}
@@ -94,7 +101,6 @@ function M.delete_annotation()
     local buf_path = vim.api.nvim_buf_get_name(0)
     local cursor_ln = vim.api.nvim_win_get_cursor(0)[1] - 1
     local ns = vim.api.nvim_create_namespace('annotate')
-    -- this searches just on the current line:
     local existing_extmarks = vim.api.nvim_buf_get_extmarks(0, ns, {cursor_ln, 0}, {cursor_ln, 0}, {})
     if next(existing_extmarks) == nil then
         print('No existing extmark here')
