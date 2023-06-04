@@ -68,13 +68,12 @@ function M.set_annotation()
         -- mark_id = existing_extmark[1][1]
         local annot_txt = db.get_annot(buf_path, cursor_ln)[1]['text']
         local annot_lines = {}
-        for line in string.gmatch(annot_txt, '([^``]+)') do
+        -- TODO: does this reliably support blank lines or other edge cases of the annotation?
+        for line in string.gmatch(annot_txt .. '``', '([^``]*)``') do
             table.insert(annot_lines, line)
         end
         local bufnr = create_annot_buf(cursor_ln)
         vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, annot_lines)
-        -- P(annot_txt)
-        -- print(annot_txt)
     end
 end
 
