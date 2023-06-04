@@ -4,15 +4,13 @@ local tbl = require('sqlite.tbl')
 local uri = vim.fn.stdpath('data') .. '/annotations_db' -- '/home/andrew/.local/shrae/nvim/annotations_db'
 local M = {}
 
--- annotations table
 local annots_tbl = tbl('annots_tbl', {
     id = true, -- same as {type='integer', required=true, primary=true}
     buf_full_path = {'text', required=true},
-    extmark_row = {'number', required=true, unique=true},
+    extmark_ln = {'number', required=true, unique=true},
     text = {'text', required=true}
 })
 
--- DB object setup?
 local db = sqlite({
     uri = uri,
     annots_tbl = annots_tbl,
@@ -23,51 +21,48 @@ function M.show_db()
     P(annots_tbl:get())
 end
 
-function M.get_annot(buf_path, extmark_ln)
+function M.get_annot(parent_buf_path, extmark_ln)
     local annot_txt = annots_tbl:get({
         select = {
             'text'
         },
         where = {
-            buf_full_path = buf_path,
-            extmark_row = extmark_ln
+            buf_full_path = parent_buf_path,
+            extmark_ln = extmark_ln
         }
     })
     return annot_txt
 end
 
-function M.get_all_annot(buf_path)
+function M.get_all_annot(parent_buf_path)
     local annots = annots_tbl:get({
         select = {
             'buf_full_path',
-            'extmark_row'
+            'extmark_ln'
         },
         where = {
-            buf_full_path = buf_path
+            buf_full_path = parent_buf_path
         }
     })
     return annots
 end
 
--- handle the parsing/formatting of the text
--- and save to database
-function M.create_annot(buf_path, extmark_ln, annot)
-    -- print('You gave me a line of ' .. extmark_ln .. ' and this text ' .. annot[1])
-    local annot_concat = table.concat(annot, '``') -- '``' hopefully this pattern is uncommon in annots
+function M.create_annot(parent_buf_path, extmark_ln, annot)
+    local annot_concat = table.concat(annot, '``')
     annots_tbl:insert({
-        buf_full_path = buf_path,
-        extmark_row = extmark_ln,
+        buf_full_path = parent_buf_path,
+        extmark_ln = extmark_ln,
         text = annot_concat
     })
     print('Created DB entry')
 end
 
-function M.updt_annot(buf_path, extmark_ln, annot)
+function M.updt_annot(parent_buf_path, extmark_ln, annot)
     local annot_concat = table.concat(annot, '``')
     annots_tbl:update({
         where = {
-            buf_full_path = buf_path,
-            extmark_row = extmark_ln
+            buf_full_path = parent_buf_path,
+            extmark_ln = extmark_ln
         },
         set = {
             text = annot_concat
@@ -75,11 +70,11 @@ function M.updt_annot(buf_path, extmark_ln, annot)
     })
 end
 
-function M.del_annot(buf_path, extmark_ln)
+function M.del_annot(parent_buf_path, extmark_ln)
     annots_tbl:remove({
         where = {
-            buf_full_path = buf_path,
-            extmark_row = extmark_ln
+            buf_full_path = parent_buf_path,
+            extmark_ln = extmark_ln
         }
     })
 end
