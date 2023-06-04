@@ -34,16 +34,17 @@ local create_annot_buf = function(cursor_ln)
     return bufnr
 end
 
-
-
 local au_group = vim.api.nvim_create_augroup('annotations', {clear=true})
-local function send_annot(buf, cursor_ln)
-    local buf_txt = vim.api.nvim_buf_get_lines(buf, 0, -1, true)
-    db.create_annot(cursor_ln + 1, buf_txt)
+
+-- TODO: here should check if the annotation is empty or not to prevent saving trash
+local function send_annot(parent_buf_path, annot_buf, cursor_ln)
+    local buf_txt = vim.api.nvim_buf_get_lines(annot_buf, 0, -1, true) -- array of lines
+    db.create_annot(parent_buf_path, cursor_ln, buf_txt)
 end
 
 -- TODO: put the floating window stuff in a helper func if it can be used elsewhere
 function M.set_annotation()
+    local buf_path = vim.api.nvim_buf_get_name(0) -- should be the buf containing the extmark
     local cursor_ln = vim.api.nvim_win_get_cursor(0)[1] - 1 -- 1-based lines conv to 0-based for extmarks
     local ns = vim.api.nvim_create_namespace('annotate')
     local opts = {
@@ -57,32 +58,40 @@ function M.set_annotation()
     if next(existing_extmark) == nil then
         mark_id = vim.api.nvim_buf_set_extmark(0, ns, cursor_ln, 0, opts)
         local bufnr = create_annot_buf(cursor_ln)
+        -- TODO: find a better event than BufLeave, which is too sensitive/general
         vim.api.nvim_create_autocmd('BufLeave', {
-            callback=function() print('Save extmark line as ' .. cursor_ln) end,
+            callback=function() send_annot(buf_path, bufnr, cursor_ln) end,
             group=au_group,
             buffer=bufnr
         })
     else
-        mark_id = existing_extmark[1][1]
-        -- TODO: create floating window and populate with current annotation from DB
-        -- can use vim.api.nvim_buf_set_lines() to set the text
-        print('Fetching annotation...')
+        -- mark_id = existing_extmark[1][1]
+        local annot_txt = db.get_annot(buf_path, cursor_ln)[1]['text']
+        local annot_lines = {}
+        for line in string.gmatch(annot_txt, '([^``]+)') do
+            table.insert(annot_lines, line)
+        end
+        local bufnr = create_annot_buf(cursor_ln)
+        vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, annot_lines)
+        -- P(annot_txt)
+        -- print(annot_txt)
     end
 end
 
 function M.delete_annotation()
-    local cursor_ln = cursor_loc()
+    local buf_path = vim.api.nvim_buf_get_name(0)
+    local cursor_ln = vim.api.nvim_win_get_cursor(0)[1] - 1
     local ns = vim.api.nvim_create_namespace('annotate')
+    -- this searches just on the current line:
     local existing_extmarks = vim.api.nvim_buf_get_extmarks(0, ns, {cursor_ln, 0}, {cursor_ln, 0}, {})
     if next(existing_extmarks) == nil then
-        -- error('No existing extmark here')
         print('No existing extmark here')
     else
         local confirm = vim.fn.input('Are you sure you want to delete this annotation? (y/n): ')
         if confirm:lower() == 'y' then
             local mark_id = existing_extmarks[1][1]
             vim.api.nvim_buf_del_extmark(0, ns, mark_id)
-            -- the call to DB should happen here
+            db.del_annot(buf_path, cursor_ln)
         else
             vim.cmd('redraw')
             print('Annotation NOT deleted')
