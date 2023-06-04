@@ -33,12 +33,29 @@ local create_annot_buf = function(cursor_ln)
     return bufnr
 end
 
+local check_annot_buf_empty = function(bufnr)
+    local buf_txt = vim.api.nvim_buf_get_lines(bufnr, 0, -1, true)
+    local empty_lines = true
+    for _, line in ipairs(buf_txt) do
+        if line ~= '' then
+            empty_lines = false
+            break
+        end
+    end
+    return empty_lines
+end
+
 local au_group = vim.api.nvim_create_augroup('annotations', {clear=true})
 
 -- TODO: here should check if the annotation is empty or not to prevent saving trash
-local function send_annot(parent_buf_path, annot_buf, cursor_ln)
-    local buf_txt = vim.api.nvim_buf_get_lines(annot_buf, 0, -1, true) -- array of lines
-    db.create_annot(parent_buf_path, cursor_ln, buf_txt)
+-- not entering any text still returns {""}
+local function send_annot(parent_buf_path, annot_buf, cursor_ln, updt_flag)
+    local buf_txt = vim.api.nvim_buf_get_lines(annot_buf, 0, -1, true)
+    if updt_flag then
+        db.updt_annot(parent_buf_path, cursor_ln, buf_txt)
+    else
+        db.create_annot(parent_buf_path, cursor_ln, buf_txt)
+    end
 end
 
 function M.set_annotations()
@@ -63,28 +80,37 @@ end
 
 -- used to set new annotation OR get existing annotation
 function M.create_annotation()
+    local extmark_parent_buf = vim.api.nvim_get_current_buf()
     local buf_path = vim.api.nvim_buf_get_name(0) -- should be the buf containing the extmark
     local cursor_ln = vim.api.nvim_win_get_cursor(0)[1] - 1 -- 1-based lines conv to 0-based for extmarks
     local ns = vim.api.nvim_create_namespace('annotate')
     local opts = {
         sign_text='󰍕'
     }
-    -- extmarks on this line
+    -- search extmarks on this line
     -- uses 0-based indices for extmark location
     local existing_extmark = vim.api.nvim_buf_get_extmarks(0, ns, {cursor_ln, 0}, {cursor_ln, 0}, {})
     -- TODO: fig out if we need mark_id?
     local mark_id
     if next(existing_extmark) == nil then
-        mark_id = vim.api.nvim_buf_set_extmark(0, ns, cursor_ln, 0, opts)
         local bufnr = create_annot_buf(cursor_ln)
         -- TODO: find a better event than BufLeave, which is too sensitive/general
+        -- THIS IS IMMEDIATELY FIRING UPON OPENING THE FLOATING WINDOW
         vim.api.nvim_create_autocmd('BufLeave', {
-            callback=function() send_annot(buf_path, bufnr, cursor_ln) end,
+            callback=function()
+                local empty_lines = check_annot_buf_empty(bufnr)
+                if empty_lines then
+                    print('Annotation is empty')
+                else
+                    mark_id = vim.api.nvim_buf_set_extmark(extmark_parent_buf, ns, cursor_ln, 0, opts)
+                    send_annot(buf_path, bufnr, cursor_ln, false)
+                    print('Annotation set')
+                end
+            end,
             group=au_group,
             buffer=bufnr
         })
     else
-        -- get existing annotation
         -- mark_id = existing_extmark[1][1]
         local annot_txt = db.get_annot(buf_path, cursor_ln)[1]['text']
         local annot_lines = {}
@@ -94,6 +120,20 @@ function M.create_annotation()
         end
         local bufnr = create_annot_buf(cursor_ln)
         vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, annot_lines)
+        -- TODO: prob better to track that buffer has been modified AND left insert mode
+        vim.api.nvim_create_autocmd('InsertLeave', {
+            callback=function()
+                local empty_lines = check_annot_buf_empty(bufnr)
+                if empty_lines then
+                    print('Annotation is empty')
+                else
+                    send_annot(buf_path, bufnr, cursor_ln, true)
+                end
+            end,
+            group=au_group,
+            buffer=bufnr
+        })
+        print('Annotation updated')
     end
 end
 

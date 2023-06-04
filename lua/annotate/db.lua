@@ -62,8 +62,17 @@ function M.create_annot(buf_path, extmark_ln, annot)
     print('Created DB entry')
 end
 
-function M.updt()
-
+function M.updt_annot(buf_path, extmark_ln, annot)
+    local annot_concat = table.concat(annot, '``')
+    annots_tbl:update({
+        where = {
+            buf_full_path = buf_path,
+            extmark_row = extmark_ln
+        },
+        set = {
+            text = annot_concat
+        }
+    })
 end
 
 function M.del_annot(buf_path, extmark_ln)
