@@ -91,37 +91,25 @@ local function set_buf_annotations(extmark_parent_buf)
     return existing_extmarks
 end
 
--- TODO: per buffer monitoring to update extmarks
--- the callback is fired on each keystroke modifying the buf, which is why we see it fire so many times
--- makes sense since we should check each time whether the extmarks are affected!
--- is too costly to be doing all these DB calls on each "breaking" change?
--- maybe smarter way is to just update Curr_extmarks every time and then on some Save or leave event, we
--- actually persist the extmarks to the database
--- from TJ vid: wrapping the on_lines callback in vim.schedule_wrap() will schedule it later when it's
--- allowed to access all the APIs (I'm guessing like vim.api.nvim_buf_get_extmarks() to fetch latest)
--- but don't even need to wrap whole thing:
--- could put vim.schedule(function() ... end) inside on_lines and just schedule the nvim_buf_get_extmarks part
--- so then only difference could be about how we can access the new extmarks?
-curr_extmarks = {} -- TODO: needs to be global?
+curr_extmarks = {}
+
 local function monitor_buf(extmark_parent_buf)
     local ns = vim.api.nvim_create_namespace('annotate')
     vim.api.nvim_buf_attach(extmark_parent_buf, false, {
-        on_lines = function(_, _, _, first_line, last_line)
+        on_lines = function(_, _, _, _, _)
             print('Callback fired from bufnr: ', extmark_parent_buf)
-            -- local lines = vim.api.nvim_buf_get_lines(extmark_parent_buf, first_line, last_line, false)
-            -- print(vim.inspect(lines))
             print('Current extmarks:')
             print(vim.inspect(curr_extmarks))
             -- schedule this to run when avail
             vim.schedule(function()
                 local mod_extmarks = vim.api.nvim_buf_get_extmarks(extmark_parent_buf, ns, 0, -1, {})
-                -- P(mod_extmarks)
-                -- extmark like {id, row, col}
                 for i, extmark1 in ipairs(curr_extmarks[extmark_parent_buf]) do
                     local id1 = extmark1[1]
                     print('Checking against current ID: ', id1)
                     for _, extmark2 in ipairs(mod_extmarks) do
                         local id2 = extmark2[1]
+                        -- TODO: this is actually replacing as long as ID matches
+                        -- is there any benefit to also conditioning on the positions being diff?
                         if id1 == id2 then
                             curr_extmarks[extmark_parent_buf][i] = extmark2
                             break
@@ -135,12 +123,20 @@ local function monitor_buf(extmark_parent_buf)
     })
 end
 
+-- TODO: define autocommand here that will flush the contents of curr_extmark to DB?
+-- reminder that curr_extmark is like
+-- {[bufnr] = {{id, row, col}, {id, row, col}}, ...}
+-- however, at that point we'd have no knowledge of which record in DB to update
+-- so might have to do the DB at the point that we have the old position and use it as
+-- the query condition
+-- addtl benefit is that assumption of only one extmark per line guarantees we're always 
+-- querying the correct record when using extmark_ln?
 function M.set_annotations()
     local cwd = '^' .. vim.fn.getcwd()
     local buf_info = vim.fn.getbufinfo()
     for _, buf in ipairs(buf_info) do
         if string.match(buf.name, cwd) and vim.fn.bufexists(buf.bufnr) then
-            curr_extmarks[buf.bufnr] = set_buf_annotations(buf.bufnr) -- initial setting
+            curr_extmarks[buf.bufnr] = set_buf_annotations(buf.bufnr)
             monitor_buf(buf.bufnr)
         end
     end
