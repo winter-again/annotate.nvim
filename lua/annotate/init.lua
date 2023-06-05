@@ -10,7 +10,6 @@ end
 
 -- TODO: allow these window options to be configured?
 -- TODO: should scrolling the parent win cause the annotation to disappear or remain anchored at line?
--- currently, highlighting the extmark sign shows which annotation mark is being edited
 local function create_annot_win(annot_buf, cursor_ln, extmark_parent_win, win_width, padding)
     local annot_win = vim.api.nvim_open_win(annot_buf, true, {
         relative = 'win',
@@ -72,13 +71,12 @@ local function check_annot_buf_empty(annot_buf)
 end
 
 -- TODO: should this function be auto-called when the plugin is started?
--- TODO: this needs to be generalized to handle multiple buffers we want to attach to
-function M.set_annotations()
-    local extmark_parent_buf = vim.api.nvim_get_current_buf()
+local function set_buf_annotations(extmark_parent_buf)
+    -- local extmark_parent_buf = vim.api.nvim_get_current_buf()
     local parent_buf_path = vim.api.nvim_buf_get_name(extmark_parent_buf)
     local ns = vim.api.nvim_create_namespace('annotate')
-    local existing_extmark = vim.api.nvim_buf_get_extmarks(0, ns, 0, -1, {})
-    if next(existing_extmark) == nil then
+    local existing_extmarks = vim.api.nvim_buf_get_extmarks(extmark_parent_buf, ns, 0, -1, {})
+    if next(existing_extmarks) == nil then
         -- TODO: should these options just be set globally?
         local opts = {
             sign_text='󰍕',
@@ -91,11 +89,34 @@ function M.set_annotations()
             for _, row in ipairs(extmark_tbl) do
                 vim.api.nvim_buf_set_extmark(extmark_parent_buf, ns, row['extmark_ln'], 0, opts)
             end
-            print('Existing annotations set')
+            print('Existing annotations set for bufnr: ', extmark_parent_buf)
         end
     else
         -- TODO: should there be additional functionality here?
-        print('Annotations already set')
+        print('Annotations already set for bufnr: ', extmark_parent_buf)
+    end
+end
+
+-- TODO: buffer monitoring to update extmarks
+local function monitor_bufs(buf_list)
+    for _, bufnr in ipairs(buf_list) do
+        vim.api.nvim_buf_attach(bufnr, false, {
+            on_lines = function()
+                -- stuff here
+            end
+        })
+    end
+end
+
+-- TODO: is this good enough to get list of buffers we could attach extmarks to? have setting func do it?
+function M.set_annotations()
+    local cwd = '^' .. vim.fn.getcwd()
+    local buf_info = vim.fn.getbufinfo()
+    for _, buf in ipairs(buf_info) do
+        if string.match(buf.name, cwd) and vim.fn.bufexists(buf.bufnr) then
+            -- table.insert(target_bufs, buf.bufnr)
+            set_buf_annotations(buf.bufnr)
+        end
     end
 end
 

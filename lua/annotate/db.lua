@@ -1,6 +1,6 @@
 local sqlite = require('sqlite.db')
 local tbl = require('sqlite.tbl')
--- TODO: should we put this in a folder?
+-- TODO: should we put this in a folder? or at least structure by project?
 local uri = vim.fn.stdpath('data') .. '/annotations_db' -- '/home/andrew/.local/shrae/nvim/annotations_db'
 local M = {}
 
