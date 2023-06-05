@@ -9,48 +9,52 @@ end
 
 -- TODO: could pass window opts here for config
 -- TODO: check for existing scratch buffer dedicated to annots
--- or can we check if the window containing it exists (despite potentially being hidden by a :close)
--- use vim.api.nvim_buf_is_loaded({buffer})?
--- using vim.fn.bufexists(name_of_the_buf) returns 0 if it doesn't exist and 1 if it does
--- using vim.fn.bufnr(name_of_the_buf) returns -1 if it doesn't exist and then the buffer handle (I think) if it does
 local function create_annot_buf(cursor_ln)
     local annot_buf_name = 'Annotation'
-    -- local annot_buf_exists_1 = vim.fn.bufexists(annot_buf_name)
-    local annot_buf_exists_1 = vim.fn.bufnr(annot_buf_name)
-    local annot_buf = vim.api.nvim_create_buf(false, true) -- unlisted scratch-buffer
-    vim.api.nvim_buf_set_name(annot_buf, annot_buf_name)
-    -- local annot_buf_exists_2 = vim.fn.bufexists(annot_buf_name)
-    local annot_buf_exists_2 = vim.fn.bufnr(annot_buf_name)
-    -- local annot_win
-    print(annot_buf_exists_1, annot_buf_exists_2)
-    -- if vim.api.nvim_buf_is_loaded()
-    --     local extmark_parent_win = vim.api.nvim_get_current_win()
-    --     local win_width = vim.api.nvim_win_get_width(extmark_parent_win)
-    --     annot_buf = vim.api.nvim_create_buf(false, true) -- unlisted scratch-buffer
-    --     vim.api.nvim_buf_set_name(annot_buf, annot_buf_name)
-    --     local padding = 2
-    --     -- TODO: consider wrapping behavior? setting a fixed textwidth?
-    --     annot_win = vim.api.nvim_open_win(annot_buf, true, {
-    --         relative = 'win',
-    --         win = extmark_parent_win,
-    --         anchor = 'NE',
-    --         row = cursor_ln - 1,
-    --         col = win_width - padding,
-    --         width = 25,
-    --         height = 20,
-    --         border = 'rounded',
-    --         style = 'minimal',
-    --         title = 'Annotation',
-    --         title_pos = 'center'
-    --     })
-    --     vim.api.nvim_buf_set_keymap(annot_buf, 'n', 'q', ':close<CR>', {noremap=true, silent=true, nowait=true})
-    --     print('Existing buffer + window didn\'t exist so created them')
-    -- else
-    --     annot_buf = vim.fn.bufnr(annot_buf_name)
-    --     annot_win = vim.fn.bufwinid(annot_buf)
-    --     print('Fetched existing buffer + window')
-    -- end
-    -- return annot_buf, annot_win
+    local annot_buf = vim.fn.bufnr(annot_buf_name) -- fetch buf if it exists
+    local extmark_parent_win = vim.api.nvim_get_current_win()
+    local win_width = vim.api.nvim_win_get_width(extmark_parent_win)
+    local padding = 2
+    local annot_win
+    if annot_buf == -1 then
+        annot_buf = vim.api.nvim_create_buf(false, true) -- unlisted scratch-buffer
+        vim.api.nvim_buf_set_name(annot_buf, annot_buf_name)
+        -- TODO: consider wrapping behavior? setting a fixed textwidth?
+        annot_win = vim.api.nvim_open_win(annot_buf, true, {
+            relative = 'win',
+            win = extmark_parent_win,
+            anchor = 'NE',
+            row = cursor_ln - 1,
+            col = win_width - padding,
+            width = 25,
+            height = 10,
+            border = 'rounded',
+            style = 'minimal',
+            title = 'Annotation',
+            title_pos = 'center'
+        })
+        vim.api.nvim_buf_set_keymap(annot_buf, 'n', 'q', ':close<CR>', {noremap=true, silent=true, nowait=true})
+        print('Existing buffer + window don\'t exist: ', annot_buf, annot_win)
+    else
+        -- TODO: should this part just be a helper function since it's used above too?
+        vim.api.nvim_buf_set_lines(annot_buf, 0, -1, true, {}) -- clear the buffer for new extmark/annotation
+        annot_win = vim.api.nvim_open_win(annot_buf, true, {
+            relative = 'win',
+            win = extmark_parent_win,
+            anchor = 'NE',
+            row = cursor_ln - 1,
+            col = win_width - padding,
+            width = 25,
+            height = 10,
+            border = 'rounded',
+            style = 'minimal',
+            title = 'Annotation',
+            title_pos = 'center'
+        })
+        vim.api.nvim_buf_set_keymap(annot_buf, 'n', 'q', ':close<CR>', {noremap=true, silent=true, nowait=true})
+        print('Fetched existing buffer + window: ', annot_buf, annot_win)
+    end
+    return annot_buf, annot_win
 end
 
 -- TODO: test this gmatch better
@@ -74,9 +78,9 @@ local function check_annot_buf_empty(annot_buf)
     return empty_lines
 end
 
-local function send_annot(parent_buf_path, annot_buf, cursor_ln, updt_flag)
+local function send_annot(parent_buf_path, annot_buf, cursor_ln, is_updt)
     local buf_txt = vim.api.nvim_buf_get_lines(annot_buf, 0, -1, true)
-    if updt_flag then
+    if is_updt then
         db.updt_annot(parent_buf_path, cursor_ln, buf_txt)
     else
         db.create_annot(parent_buf_path, cursor_ln, buf_txt)
@@ -125,10 +129,19 @@ function M.set_annotations()
     end
 end
 
+-- TODO: only for debugging
+function M.check_line()
+    local extmark_parent_win = vim.api.nvim_get_current_win()
+    local extmark_parent_buf = vim.api.nvim_win_get_buf(extmark_parent_win)
+    local cursor_ln = vim.api.nvim_win_get_cursor(extmark_parent_win)[1] - 1
+    local ns = vim.api.nvim_create_namespace('annotate')
+    local existing_extmark = vim.api.nvim_buf_get_extmarks(extmark_parent_buf, ns, {cursor_ln, 0}, {cursor_ln, 0}, {})
+    P(existing_extmark)
+    print('Cursor @ ', cursor_ln + 1)
+end
+
 function M.create_annotation()
     local extmark_parent_win = vim.api.nvim_get_current_win()
-    -- TODO: is one of these clearly favorable?
-    -- local extmark_parent_buf = vim.api.nvim_get_current_buf()
     local extmark_parent_buf = vim.api.nvim_win_get_buf(extmark_parent_win)
     local parent_buf_path = vim.api.nvim_buf_get_name(extmark_parent_buf)
     local cursor_ln = vim.api.nvim_win_get_cursor(extmark_parent_win)[1] - 1 -- 1-based lines conv to 0-based for extmarks
@@ -138,48 +151,52 @@ function M.create_annotation()
     }
     -- uses 0-based indices for extmark location
     local existing_extmark = vim.api.nvim_buf_get_extmarks(extmark_parent_buf, ns, {cursor_ln, 0}, {cursor_ln, 0}, {})
-    -- TODO: fig out if we need mark_id?
-    local mark_id
+    -- TODO: fig out if we need mark_id
+    -- local mark_id
+    local annot_buf
+    local is_updt
     if next(existing_extmark) == nil then
-        local annot_buf, annot_win = create_annot_buf(cursor_ln)
-        -- TODO: find a better event than BufLeave, which is too sensitive/general
-        vim.api.nvim_create_autocmd('BufLeave', {
-            callback=function()
-                local empty_lines = check_annot_buf_empty(annot_buf)
-                if empty_lines then
-                    -- TODO: instead of just denying, ask whether the annotation should just be deleted?
-                    print('Annotation is empty')
-                else
-                    mark_id = vim.api.nvim_buf_set_extmark(extmark_parent_buf, ns, cursor_ln, 0, opts)
-                    send_annot(parent_buf_path, annot_buf, cursor_ln, false)
-                    print('Annotation set')
-                end
-            end,
-            group=au_group,
-            buffer=annot_buf
-        })
+        annot_buf, _ = create_annot_buf(cursor_ln)
+        is_updt = false
+        print('Creating new annotation')
     else
         -- mark_id = existing_extmark[1][1]
         local annot_txt = db.get_annot(parent_buf_path, cursor_ln)[1]['text']
         local annot_lines = build_annot(annot_txt)
-        local annot_buf, annot_win = create_annot_buf(cursor_ln)
+        annot_buf, _ = create_annot_buf(cursor_ln)
         vim.api.nvim_buf_set_lines(annot_buf, 0, -1, false, annot_lines)
-        -- TODO: prob better to track that buffer has been modified AND left insert mode
-        vim.api.nvim_create_autocmd('InsertLeave', {
-            callback=function()
-                local empty_lines = check_annot_buf_empty(annot_buf)
-                if empty_lines then
-                    -- TODO: instead of denying, ask whether annotation should be deleted instead
-                    print('Annotation is empty')
-                else
-                    send_annot(parent_buf_path, annot_buf, cursor_ln, true)
-                    print('Annotation updated')
-                end
-            end,
-            group=au_group,
-            buffer=annot_buf
-        })
+        is_updt = true
+        print('Fetched existing annotation')
     end
+
+    -- TODO: prob better to track that buffer has been modified AND left insert mode; or something closing window?
+    -- TODO: this is actually triggering the creation of another extmark and db entry even if 
+    -- called on a new row and recognized as a new annotation
+    vim.api.nvim_create_autocmd('BufLeave', {
+        callback=function()
+            local empty_lines = check_annot_buf_empty(annot_buf)
+            if empty_lines then
+                -- TODO: instead of denying, ask whether annotation should be deleted instead
+                print('Annotation is empty')
+            else
+                local buf_txt = vim.api.nvim_buf_get_lines(annot_buf, 0, -1, true)
+                -- TODO: database is getting a duplicate row instead of just updating the one row
+                -- also another extmark is being created despite this being an update
+                if is_updt then
+                    -- send_annot(parent_buf_path, annot_buf, cursor_ln, is_updt)
+                    db.updt_annot(parent_buf_path, cursor_ln, buf_txt)
+                    print('Modified annotation. is_updt: ', is_updt)
+                else
+                    vim.api.nvim_buf_set_extmark(extmark_parent_buf, ns, cursor_ln, 0, opts)
+                    -- send_annot(parent_buf_path, annot_buf, cursor_ln, is_updt)
+                    db.create_annot(parent_buf_path, cursor_ln, buf_txt)
+                    print('Created new annotation. is_updt: ', is_updt)
+                end
+            end
+        end,
+        group=au_group,
+        buffer=annot_buf
+    })
 end
 
 function M.delete_annotation()

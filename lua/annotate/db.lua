@@ -7,7 +7,7 @@ local M = {}
 local annots_tbl = tbl('annots_tbl', {
     id = true, -- same as {type='integer', required=true, primary=true}
     buf_full_path = {'text', required=true},
-    extmark_ln = {'number', required=true, unique=true},
+    extmark_ln = {'number', required=true}, -- removed unique constraint here...using it incorrectly?
     text = {'text', required=true}
 })
 
@@ -54,18 +54,18 @@ function M.create_annot(parent_buf_path, extmark_ln, annot)
         extmark_ln = extmark_ln,
         text = annot_concat
     })
-    print('Created DB entry')
+    -- print('Created DB entry')
 end
 
 function M.updt_annot(parent_buf_path, extmark_ln, annot)
     local annot_concat = table.concat(annot, '``')
     annots_tbl:update({
+        set = {
+            text = annot_concat
+        },
         where = {
             buf_full_path = parent_buf_path,
             extmark_ln = extmark_ln
-        },
-        set = {
-            text = annot_concat
         }
     })
 end
