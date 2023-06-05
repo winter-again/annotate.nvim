@@ -92,55 +92,58 @@ local function set_buf_annotations(extmark_parent_buf)
 end
 
 -- TODO: per buffer monitoring to update extmarks
+-- the callback is fired on each keystroke modifying the buf, which is why we see it fire so many times
+-- makes sense since we should check each time whether the extmarks are affected!
+-- is too costly to be doing all these DB calls on each "breaking" change?
+-- maybe smarter way is to just update Curr_extmarks every time and then on some Save or leave event, we
+-- actually persist the extmarks to the database
+-- from TJ vid: wrapping the on_lines callback in vim.schedule_wrap() will schedule it later when it's
+-- allowed to access all the APIs (I'm guessing like vim.api.nvim_buf_get_extmarks() to fetch latest)
+-- but don't even need to wrap whole thing:
+-- could put vim.schedule(function() ... end) inside on_lines and just schedule the nvim_buf_get_extmarks part
+-- so then only difference could be about how we can access the new extmarks?
+curr_extmarks = {} -- TODO: needs to be global?
 local function monitor_buf(extmark_parent_buf)
     local ns = vim.api.nvim_create_namespace('annotate')
     vim.api.nvim_buf_attach(extmark_parent_buf, false, {
-        on_lines = function()
-            -- TODO: this is where we'd update the DB if any extmark position has been changed
-            -- 1) only attached once the last loaded extmarks have been placed, thus giving them IDs;
-            -- this is like the initial state of extmarks
-            -- SAVE THEIR POSITIONS IN SOME DS AFTER SET IS DONE, ALONG WITH THEIR IDS
-            -- 2) this is fired on line change so check if each extmark's position is the same, using ID to ensure
-            -- we're comparing the right values
-            -- could potentially use on_lines args directly like lines that were changed? or is it too general?
-            -- 3) if changed, then delete the DB entry corresponding to the original location and
-            -- insert a new entry with updated location
-            -- 4) also update our in-memory DS of current marks?
-
-            -- TODO: again, are we using schedule as intended?
+        on_lines = function(_, _, _, first_line, last_line)
+            print('Callback fired from bufnr: ', extmark_parent_buf)
+            -- local lines = vim.api.nvim_buf_get_lines(extmark_parent_buf, first_line, last_line, false)
+            -- print(vim.inspect(lines))
+            print('Current extmarks:')
+            print(vim.inspect(curr_extmarks))
+            -- schedule this to run when avail
             vim.schedule(function()
                 local mod_extmarks = vim.api.nvim_buf_get_extmarks(extmark_parent_buf, ns, 0, -1, {})
-                P(mod_extmarks)
+                -- P(mod_extmarks)
+                -- extmark like {id, row, col}
+                for i, extmark1 in ipairs(curr_extmarks[extmark_parent_buf]) do
+                    local id1 = extmark1[1]
+                    print('Checking against current ID: ', id1)
+                    for _, extmark2 in ipairs(mod_extmarks) do
+                        local id2 = extmark2[1]
+                        if id1 == id2 then
+                            curr_extmarks[extmark_parent_buf][i] = extmark2
+                            break
+                        end
+                    end
+                end
+                print('Updated extmarks:')
+                print(vim.inspect(curr_extmarks))
             end)
-            -- extmark like {id, row, col}
-            -- for _, extmark1 in ipairs(Curr_extmarks[extmark_parent_buf]) do
-            --     local id1 = extmark1[1] -- confirmed that id1 is taking on the desired vals
-            --     print(id1)
-            --     -- for _, extmark2 in ipairs(mod_extmarks) do
-            --     --     local id2 = extmark2[1]
-            --     --     if id1 == id2 then
-            --     --         print('Match found')
-            --     --     end
-            --     -- end
-            -- end
-            print('Callback fired from bufnr: ', extmark_parent_buf)
-            print('Current extmarks: ')
-            P(Curr_extmarks)
         end
     })
 end
 
-Curr_extmarks = {} -- needs to be global?
 function M.set_annotations()
     local cwd = '^' .. vim.fn.getcwd()
     local buf_info = vim.fn.getbufinfo()
     for _, buf in ipairs(buf_info) do
         if string.match(buf.name, cwd) and vim.fn.bufexists(buf.bufnr) then
-            Curr_extmarks[buf.bufnr] = set_buf_annotations(buf.bufnr) -- initial setting
+            curr_extmarks[buf.bufnr] = set_buf_annotations(buf.bufnr) -- initial setting
             monitor_buf(buf.bufnr)
         end
     end
-    -- P(curr_extmarks)
 end
 
 -- TODO: delete this helper too
