@@ -72,6 +72,7 @@ local function check_annot_buf_empty(annot_buf)
 end
 
 -- TODO: should this function be auto-called when the plugin is started?
+-- TODO: this needs to be generalized to handle multiple buffers we want to attach to
 function M.set_annotations()
     local extmark_parent_buf = vim.api.nvim_get_current_buf()
     local parent_buf_path = vim.api.nvim_buf_get_name(extmark_parent_buf)
@@ -84,10 +85,14 @@ function M.set_annotations()
             sign_hl_group = 'comment'
         }
         local extmark_tbl = db.get_all_annot(parent_buf_path)
-        for _, row in ipairs(extmark_tbl) do
-            vim.api.nvim_buf_set_extmark(extmark_parent_buf, ns, row['extmark_ln'], 0, opts)
+        if next(extmark_tbl) == nil then
+            print('No annotations exist for this file')
+        else
+            for _, row in ipairs(extmark_tbl) do
+                vim.api.nvim_buf_set_extmark(extmark_parent_buf, ns, row['extmark_ln'], 0, opts)
+            end
+            print('Existing annotations set')
         end
-        print('Existing annotations set')
     else
         -- TODO: should there be additional functionality here?
         print('Annotations already set')
