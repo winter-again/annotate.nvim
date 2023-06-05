@@ -131,7 +131,7 @@ function M.create_annotation()
         annot_buf, _ = create_annot_buf(cursor_ln)
         vim.api.nvim_buf_set_lines(annot_buf, 0, -1, false, annot_lines)
         is_updt = true
-        -- TODO: CLEAN UP
+        -- TODO: clean this up to use desired hl group, symbol, etc.
         vim.api.nvim_buf_set_extmark(extmark_parent_buf, ns, cursor_ln, 0, {
             id = mark_id,
             sign_text = '󰍕',
@@ -142,7 +142,7 @@ function M.create_annotation()
 
     -- TODO: consider other/addtl events
     -- other events to consider:
-    -- WinClosed, WinLeave (BufLeave is executed before this)
+    -- WinClosed, WinLeave (BufLeave is executed before it)
     -- TODO: saving to DB should only happen if the annotation buffer actually has mods --> vim.api.nvim_buf_attach()
     local au_group = vim.api.nvim_create_augroup('Annotate', {clear=true})
     vim.api.nvim_create_autocmd('BufHidden', {
@@ -166,7 +166,7 @@ function M.create_annotation()
                     print('Created new annotation. is_updt: ', is_updt)
                 end
             end
-            -- TODO: clean this up too?
+            -- TODO: clean this up too
             vim.api.nvim_buf_set_extmark(extmark_parent_buf, ns, cursor_ln, 0, {
                 id = curr_mark,
                 sign_text = '󰍕',
@@ -185,22 +185,37 @@ function M.delete_annotation()
     local cursor_ln = vim.api.nvim_win_get_cursor(extmark_parent_win)[1] - 1
     local ns = vim.api.nvim_create_namespace('annotate')
     local existing_extmark = vim.api.nvim_buf_get_extmarks(extmark_parent_buf, ns, {cursor_ln, 0}, {cursor_ln, 0}, {})
+    local mark_id
+
     if next(existing_extmark) == nil then
         print('No existing extmark here')
     else
         local annot_txt = db.get_annot(parent_buf_path, cursor_ln)[1]['text']
         local annot_lines = build_annot(annot_txt)
         local annot_buf, annot_win = create_annot_buf(cursor_ln)
+        mark_id = existing_extmark[1][1]
         vim.api.nvim_buf_set_lines(annot_buf, 0, -1, false, annot_lines)
+        -- TODO: clean this up too
+        vim.api.nvim_buf_set_extmark(extmark_parent_buf, ns, cursor_ln, 0, {
+            id = mark_id,
+            sign_text = '󰍕',
+            sign_hl_group = 'Error'
+        })
 
         -- TODO: I *think* this is proper use of vim.schedule? intention is to schedule prompt for after window shown
         vim.schedule(function()
             local confirm = vim.fn.input('Are you sure you want to delete this annotation? (y/n): ')
             if confirm:lower() == 'y' then
-                local mark_id = existing_extmark[1][1]
+                -- local mark_id = existing_extmark[1][1]
                 vim.api.nvim_buf_del_extmark(extmark_parent_buf, ns, mark_id)
                 db.del_annot(parent_buf_path, cursor_ln)
-                -- TODO: should this be a window deletion instead?
+                print('Deleted successfully')
+                -- TODO: this seems to trigger the BufHidden autocmd and deletion doesn't happen correctly
+                -- trying just deleting the autogroup...should be restored by create func?
+                -- other option that seems to work is vim.cmd('noautocmd') to disable autocmds for one command
+                -- this isn't very specific though, so side-effects?
+                vim.api.nvim_del_augroup_by_name('Annotate')
+                -- vim.cmd('noautocmd')
                 vim.api.nvim_win_hide(annot_win)
             else
                 print('Annotation NOT deleted')
