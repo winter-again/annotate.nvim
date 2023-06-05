@@ -125,7 +125,7 @@ function M.create_annotation()
     if next(existing_extmark) == nil then
         annot_buf, _ = create_annot_buf(cursor_ln)
         is_updt = false
-        print('Creating new annotation')
+        -- print('Creating new annotation')
     else
         mark_id = existing_extmark[1][1]
         local annot_txt = db.get_annot(parent_buf_path, cursor_ln)[1]['text']
@@ -139,7 +139,7 @@ function M.create_annotation()
             sign_text = '󰍕',
             sign_hl_group = 'Error'
         })
-        print('Fetched existing annotation')
+        -- print('Fetched existing annotation')
     end
 
     -- TODO: prob better to track that buffer has been modified AND left insert mode; or something closing window?
@@ -152,6 +152,7 @@ function M.create_annotation()
             local curr_mark
             if empty_lines then
                 -- TODO: instead of denying, ask whether annotation should be deleted instead
+                curr_mark = mark_id
                 print('Annotation is empty')
             else
                 -- TODO: only do DB operations after checking that the annotation has actually changed
@@ -159,19 +160,19 @@ function M.create_annotation()
                 if is_updt then
                     db.updt_annot(parent_buf_path, cursor_ln, buf_txt)
                     curr_mark = mark_id
-                    print('Modified annotation. is_updt: ', is_updt)
+                    -- print('Modified annotation. is_updt: ', is_updt)
                 else
                     curr_mark = vim.api.nvim_buf_set_extmark(extmark_parent_buf, ns, cursor_ln, 0, opts)
                     db.create_annot(parent_buf_path, cursor_ln, buf_txt)
-                    print('Created new annotation. is_updt: ', is_updt)
+                    -- print('Created new annotation. is_updt: ', is_updt)
                 end
-                -- TODO: clean this up too?
-                vim.api.nvim_buf_set_extmark(extmark_parent_buf, ns, cursor_ln, 0, {
-                    id = curr_mark,
-                    sign_text = '󰍕',
-                    sign_hl_group = 'comment'
-                })
             end
+            -- TODO: clean this up too?
+            vim.api.nvim_buf_set_extmark(extmark_parent_buf, ns, cursor_ln, 0, {
+                id = curr_mark,
+                sign_text = '󰍕',
+                sign_hl_group = 'comment'
+            })
         end,
         group=au_group,
         buffer=annot_buf
