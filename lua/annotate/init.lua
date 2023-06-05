@@ -8,9 +8,8 @@ function M.list_annotations()
 end
 
 -- TODO: allow these window options to be configured?
--- TODO: should scrolling the parent win cause the annotation to disappear or remain anchored?
--- if we keep it in view, you could lose track of which extmark it corresponds to, unless
--- can do some kind of highlighting to show the current extmark?
+-- TODO: should scrolling the parent win cause the annotation to disappear or remain anchored at line?
+-- currently, highlighting the extmark sign shows which annotation mark is being edited
 local function create_annot_win(annot_buf, cursor_ln, extmark_parent_win, win_width, padding)
     local annot_win = vim.api.nvim_open_win(annot_buf, true, {
         relative = 'win',
@@ -111,7 +110,6 @@ function M.create_annotation()
     local parent_buf_path = vim.api.nvim_buf_get_name(extmark_parent_buf)
     local cursor_ln = vim.api.nvim_win_get_cursor(extmark_parent_win)[1] - 1 -- 1-based lines conv to 0-based for extmarks
     local ns = vim.api.nvim_create_namespace('annotate')
-    -- vim.api.nvim_set_hl(ns, 'AnnotSign', {bg='#FF0000'})
     -- TODO: use webdevicons as default or allow config?
     local opts = {
         sign_text = '󰍕',
@@ -142,11 +140,12 @@ function M.create_annotation()
         -- print('Fetched existing annotation')
     end
 
-    -- TODO: prob better to track that buffer has been modified AND left insert mode; or something closing window?
-    -- TODO: make sure this isn't behaving diff from expectations
-    -- TODO: could clean it up too and stick in a function that we'd ref here as callback
+    -- TODO: consider other/addtl events
+    -- other events to consider:
+    -- WinClosed, WinLeave (BufLeave is executed before this)
+    -- TODO: saving to DB should only happen if the annotation buffer actually has mods --> vim.api.nvim_buf_attach()
     local au_group = vim.api.nvim_create_augroup('Annotate', {clear=true})
-    vim.api.nvim_create_autocmd('BufLeave', {
+    vim.api.nvim_create_autocmd('BufHidden', {
         callback=function()
             local empty_lines = check_annot_buf_empty(annot_buf)
             local curr_mark
@@ -160,11 +159,11 @@ function M.create_annotation()
                 if is_updt then
                     db.updt_annot(parent_buf_path, cursor_ln, buf_txt)
                     curr_mark = mark_id
-                    -- print('Modified annotation. is_updt: ', is_updt)
+                    print('Modified annotation. is_updt: ', is_updt)
                 else
                     curr_mark = vim.api.nvim_buf_set_extmark(extmark_parent_buf, ns, cursor_ln, 0, opts)
                     db.create_annot(parent_buf_path, cursor_ln, buf_txt)
-                    -- print('Created new annotation. is_updt: ', is_updt)
+                    print('Created new annotation. is_updt: ', is_updt)
                 end
             end
             -- TODO: clean this up too?
@@ -181,8 +180,6 @@ end
 
 function M.delete_annotation()
     local extmark_parent_win = vim.api.nvim_get_current_win()
-    -- TODO: same here, is  one better?
-    -- local extmark_parent_buf = vim.api.nvim_get_current_buf()
     local extmark_parent_buf = vim.api.nvim_win_get_buf(extmark_parent_win)
     local parent_buf_path = vim.api.nvim_buf_get_name(extmark_parent_buf)
     local cursor_ln = vim.api.nvim_win_get_cursor(extmark_parent_win)[1] - 1
