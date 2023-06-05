@@ -7,7 +7,7 @@ local M = {}
 local annots_tbl = tbl('annots_tbl', {
     id = true, -- same as {type='integer', required=true, primary=true}
     buf_full_path = {'text', required=true},
-    extmark_ln = {'number', required=true}, -- removed unique constraint here...using it incorrectly?
+    extmark_ln = {'number', required=true, unique=true}, -- is unique used properly here?
     text = {'text', required=true}
 })
 

@@ -1,6 +1,7 @@
 local db = require('annotate.db')
 local M = {}
 
+-- TODO: delete this helper too
 function M.list_annotations()
     local namespace = vim.api.nvim_create_namespace('annotate')
     local marks = vim.api.nvim_buf_get_extmarks(0, namespace, 0, -1, {})
@@ -86,10 +87,10 @@ function M.set_annotations()
         for _, row in ipairs(extmark_tbl) do
             vim.api.nvim_buf_set_extmark(extmark_parent_buf, ns, row['extmark_ln'], 0, opts)
         end
-        print('Existing extmarks set')
+        print('Existing annotations set')
     else
         -- TODO: should there be additional functionality here?
-        print('Extmarks already set')
+        print('Annotations already set')
     end
 end
 
@@ -202,7 +203,7 @@ function M.delete_annotation()
             sign_hl_group = 'Error'
         })
 
-        -- TODO: I *think* this is proper use of vim.schedule? intention is to schedule prompt for after window shown
+        -- TODO: I *think* this is proper use of vim.schedule? intent: schedule prompt for after window shown
         vim.schedule(function()
             local confirm = vim.fn.input('Are you sure you want to delete this annotation? (y/n): ')
             if confirm:lower() == 'y' then
@@ -213,7 +214,7 @@ function M.delete_annotation()
                 -- TODO: this seems to trigger the BufHidden autocmd and deletion doesn't happen correctly
                 -- trying just deleting the autogroup...should be restored by create func?
                 -- other option that seems to work is vim.cmd('noautocmd') to disable autocmds for one command
-                -- this isn't very specific though, so side-effects?
+                -- unsure how pecific though, so side-effects?
                 vim.api.nvim_del_augroup_by_name('Annotate')
                 -- vim.cmd('noautocmd')
                 vim.api.nvim_win_hide(annot_win)
