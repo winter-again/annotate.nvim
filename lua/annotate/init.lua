@@ -87,25 +87,6 @@ local function send_annot(parent_buf_path, annot_buf, cursor_ln, is_updt)
     end
 end
 
--- local function disp_annot(parent_buf_path, cursor_ln)
---     local annot_txt = db.get_annot(parent_buf_path, cursor_ln)[1]['text']
---     local annot_lines = build_annot(annot_txt)
---     local annot_buf, annot_win = create_annot_buf(cursor_ln)
---     vim.api.nvim_buf_set_lines(annot_buf, 0, -1, false, annot_lines)
--- end
-
--- local function confirm_annot_del(parent_buf_path, cursor_ln)
---     local chan = vim.loop.new_channel()
---     async.void(function()
---         local input = vim.fn.input('Are you sure you want to delete this annotation? (y/n): ')
---         chan.send(input)
---     end)()
---     async.void(function()
---         local input = chan.recv()
---         disp_annot(parent_buf_path, cursor_ln)
---     end)()
--- end
-
 local au_group = vim.api.nvim_create_augroup('Annotate', {clear=true})
 
 -- TODO: should this function be auto-called when the plugin is started?
@@ -140,6 +121,43 @@ function M.check_line()
     print('Cursor @ ', cursor_ln + 1)
 end
 
+local function on_annotation_close()
+    print('Left the annotation window. Saving the data...')
+end
+
+-- TODO: prob better to track that buffer has been modified AND left insert mode; or something closing window?
+-- TODO: this is actually triggering the creation of another extmark and db entry even if 
+-- called on a new row and recognized as a new annotation
+-- can see that two messages are getting sent out if I'm creating a second mark, with both is_updt
+-- flags taking on false --> so there's something wrong in this callback and the conditions checked
+-- I think it's because we aren't paying attention to what's getting fed into this autocmd, like cursor_ln
+-- and not understanding what's really going on with this callback/triggering
+-- vim.api.nvim_create_autocmd('BufLeave', {
+--     callback=function()
+--         local empty_lines = check_annot_buf_empty(annot_buf)
+--         if empty_lines then
+--             -- TODO: instead of denying, ask whether annotation should be deleted instead
+--             print('Annotation is empty')
+--         else
+--             local buf_txt = vim.api.nvim_buf_get_lines(annot_buf, 0, -1, true)
+--             -- TODO: database is getting a duplicate row instead of just updating the one row
+--             -- also another extmark is being created despite this being an update
+--             if is_updt then
+--                 -- send_annot(parent_buf_path, annot_buf, cursor_ln, is_updt)
+--                 db.updt_annot(parent_buf_path, cursor_ln, buf_txt)
+--                 print('Modified annotation. is_updt: ', is_updt)
+--             else
+--                 vim.api.nvim_buf_set_extmark(extmark_parent_buf, ns, cursor_ln, 0, opts)
+--                 -- send_annot(parent_buf_path, annot_buf, cursor_ln, is_updt)
+--                 db.create_annot(parent_buf_path, cursor_ln, buf_txt)
+--                 print('Created new annotation. is_updt: ', is_updt)
+--             end
+--         end
+--     end,
+--     group=au_group,
+--     buffer=annot_buf
+-- })
+
 function M.create_annotation()
     local extmark_parent_win = vim.api.nvim_get_current_win()
     local extmark_parent_buf = vim.api.nvim_win_get_buf(extmark_parent_win)
@@ -149,7 +167,6 @@ function M.create_annotation()
     local opts = {
         sign_text='󰍕'
     }
-    -- uses 0-based indices for extmark location
     local existing_extmark = vim.api.nvim_buf_get_extmarks(extmark_parent_buf, ns, {cursor_ln, 0}, {cursor_ln, 0}, {})
     -- TODO: fig out if we need mark_id
     -- local mark_id
@@ -159,6 +176,7 @@ function M.create_annotation()
         annot_buf, _ = create_annot_buf(cursor_ln)
         is_updt = false
         print('Creating new annotation')
+        P(existing_extmark)
     else
         -- mark_id = existing_extmark[1][1]
         local annot_txt = db.get_annot(parent_buf_path, cursor_ln)[1]['text']
@@ -167,35 +185,14 @@ function M.create_annotation()
         vim.api.nvim_buf_set_lines(annot_buf, 0, -1, false, annot_lines)
         is_updt = true
         print('Fetched existing annotation')
+        P(existing_extmark)
     end
 
-    -- TODO: prob better to track that buffer has been modified AND left insert mode; or something closing window?
-    -- TODO: this is actually triggering the creation of another extmark and db entry even if 
-    -- called on a new row and recognized as a new annotation
-    vim.api.nvim_create_autocmd('BufLeave', {
-        callback=function()
-            local empty_lines = check_annot_buf_empty(annot_buf)
-            if empty_lines then
-                -- TODO: instead of denying, ask whether annotation should be deleted instead
-                print('Annotation is empty')
-            else
-                local buf_txt = vim.api.nvim_buf_get_lines(annot_buf, 0, -1, true)
-                -- TODO: database is getting a duplicate row instead of just updating the one row
-                -- also another extmark is being created despite this being an update
-                if is_updt then
-                    -- send_annot(parent_buf_path, annot_buf, cursor_ln, is_updt)
-                    db.updt_annot(parent_buf_path, cursor_ln, buf_txt)
-                    print('Modified annotation. is_updt: ', is_updt)
-                else
-                    vim.api.nvim_buf_set_extmark(extmark_parent_buf, ns, cursor_ln, 0, opts)
-                    -- send_annot(parent_buf_path, annot_buf, cursor_ln, is_updt)
-                    db.create_annot(parent_buf_path, cursor_ln, buf_txt)
-                    print('Created new annotation. is_updt: ', is_updt)
-                end
-            end
-        end,
-        group=au_group,
-        buffer=annot_buf
+    -- TODO: figure out if this is more useful than autocmd for BufLeave
+    vim.api.nvim_buf_attach(annot_buf, false, {
+        on_lines = function(_, _, _, _, _)
+
+        end
     })
 end
 
