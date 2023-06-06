@@ -72,7 +72,7 @@ local function set_buf_annotations(extmark_parent_buf)
     if next(existing_extmarks) == nil then
         local extmark_tbl = db.get_all_annot(parent_buf_path)
         if next(extmark_tbl) == nil then
-            print('No annotations exist for this file')
+            -- print('No annotations exist for this file')
         else
             local opts = {
                 sign_text = M.config.annot_sign,
@@ -82,11 +82,11 @@ local function set_buf_annotations(extmark_parent_buf)
                 vim.api.nvim_buf_set_extmark(extmark_parent_buf, ns, row.extmark_ln, 0, opts)
             end
             existing_extmarks = vim.api.nvim_buf_get_extmarks(extmark_parent_buf, ns, 0, -1, {})
-            print('Existing annotations set for bufnr: ', extmark_parent_buf)
+            -- print('Existing annotations set for bufnr: ', extmark_parent_buf)
         end
     else
         -- TODO: should there be additional functionality here?
-        print('Annotations already set for bufnr: ', extmark_parent_buf)
+        -- print('Annotations already set for bufnr: ', extmark_parent_buf)
     end
     return existing_extmarks
 end
@@ -176,6 +176,7 @@ function M.create_annotation()
     -- TODO: consider other/addtl events depending on how user might interact with the floating window
     -- other events to consider: WinClosed, WinLeave (BufLeave is executed before it)
     local au_group_edit = vim.api.nvim_create_augroup('AnnotateEdit', {clear=true})
+    -- local au_group_edit = vim.api.nvim_create_augroup('Annotate', {clear=true})
     vim.api.nvim_create_autocmd('BufHidden', {
         callback = function()
             local empty_lines = check_annot_buf_empty(annot_buf)
@@ -192,7 +193,7 @@ function M.create_annotation()
                     db.updt_annot(parent_buf_path, cursor_ln, buf_txt)
                     curr_mark = mark_id
                     print('Modified annotation. is_updt: ', is_updt)
-                else -- extmark doesn't yet exist so create annotation and the extmark
+                else
                     db.create_annot(parent_buf_path, cursor_ln, buf_txt)
                     curr_mark = vim.api.nvim_buf_set_extmark(extmark_parent_buf, ns, cursor_ln, 0, {
                         sign_text = M.config.annot_sign,
@@ -245,12 +246,8 @@ function M.delete_annotation()
                 vim.api.nvim_buf_del_extmark(extmark_parent_buf, ns, mark_id)
                 db.del_annot(parent_buf_path, cursor_ln)
                 print('Deleted successfully')
-                -- TODO: this seems to trigger the BufHidden autocmd and deletion doesn't happen correctly
-                -- trying just deleting the autogroup...seems like a hacky way
-                -- other option that seems to work is vim.cmd('noautocmd') to disable autocmds for one command
-                -- unsure how pecific though, so side-effects?
-                vim.api.nvim_del_augroup_by_name('AnnotateEdit')
-                -- vim.cmd('noautocmd')
+                -- TODO: is this the right way of handling? Should only disable for the following command
+                vim.cmd('noautocmd')
                 vim.api.nvim_win_hide(annot_win)
             else
                 print('Annotation NOT deleted')
@@ -261,6 +258,7 @@ end
 
 -- TODO: is there a better way to specify/config hl? or how do we set a sensible default at least
 -- TODO: use webdevicons for symbol instead?
+-- TODO: allow window config here?
 local default_opts = {
     annot_sign = '󰍕',
     annot_sign_hl = 'Comment',
@@ -269,10 +267,12 @@ local default_opts = {
 
 function M.setup(opts)
     M.config = vim.tbl_deep_extend('force', default_opts, opts or {})
-    -- TODO: use a better event? make it run the setting and monitoring functionality
-    -- considering BufAdd, BufReadPre, BufReadPost, and BufNew
+    -- TODO: need to add another event(s) to track when user opens a new buffer that they
+    -- might start setting annotations? or already handled enough by the create_annotation func?
+    -- considering BufNew, BufAdd, BufReadPre, BufReadPost
     -- TODO: change pattern to be more specific?
     local au_group_set = vim.api.nvim_create_augroup('AnnotateSet', {clear=true})
+    -- local au_group_set = vim.api.nvim_create_augroup('Annotate', {clear=true})
     vim.api.nvim_create_autocmd({'BufReadPost'}, {
         callback = function()
             set_annotations()
