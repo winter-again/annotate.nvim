@@ -282,7 +282,7 @@ local default_opts = {
 function M.setup(opts)
     M.config = vim.tbl_deep_extend('force', default_opts, opts or {})
     local au_group_set = vim.api.nvim_create_augroup('AnnotateSet', {clear=true})
-    vim.api.nvim_create_autocmd({'VimEnter'}, {
+    vim.api.nvim_create_autocmd({'BufAdd', 'BufEnter'}, {
         callback = function()
             print('Setup autocmd fired')
         end,
