@@ -97,24 +97,35 @@ local function monitor_buf(extmark_parent_buf)
     local ns = vim.api.nvim_create_namespace('annotate')
     vim.api.nvim_buf_attach(extmark_parent_buf, false, {
         on_lines = function(_, _, _, _, _)
+            local parent_buf_path = vim.api.nvim_buf_get_name(extmark_parent_buf)
             print('Callback fired from bufnr: ', extmark_parent_buf)
             print('Current extmarks:')
             print(vim.inspect(curr_extmarks))
-            -- schedule this to run when avail
+            -- reminder that curr_extmark is like
+            -- {[bufnr] = {{id, row, col}, {id, row, col}}, ...}
             vim.schedule(function()
                 local mod_extmarks = vim.api.nvim_buf_get_extmarks(extmark_parent_buf, ns, 0, -1, {})
+                -- for each extmark for current buf
                 for i, extmark1 in ipairs(curr_extmarks[extmark_parent_buf]) do
                     local id1 = extmark1[1]
-                    print('Checking against current ID: ', id1)
+                    local ln1 = extmark1[2]
+                    -- for each extmark in the latest list of entries
                     for _, extmark2 in ipairs(mod_extmarks) do
                         local id2 = extmark2[1]
-                        -- TODO: this is actually replacing as long as ID matches
-                        -- is there any benefit to also conditioning on the positions being diff?
-                        if id1 == id2 then
+                        local ln2 = extmark2[2]
+                        if id1 == id2 and ln1 ~= ln2 then
+                            -- print('Old:')
+                            -- print(vim.inspect(curr_extmarks[extmark_parent_buf][i]))
+                            -- print('New:')
+                            -- print(vim.inspect(extmark2))
                             curr_extmarks[extmark_parent_buf][i] = extmark2
                             break
                         end
                     end
+                    -- now flush to DB once extmark1 has completed its checking/updating
+                    -- print('Replacing ', ln1)
+                    -- print('with ', curr_extmarks[extmark_parent_buf][i][2])
+                    db.updt_annot_pos(parent_buf_path, ln1, curr_extmarks[extmark_parent_buf][i][2])
                 end
                 print('Updated extmarks:')
                 print(vim.inspect(curr_extmarks))

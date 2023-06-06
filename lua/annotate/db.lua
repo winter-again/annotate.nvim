@@ -70,6 +70,19 @@ function M.updt_annot(parent_buf_path, extmark_ln, annot)
     })
 end
 
+-- TODO: ok to set on something in where?
+function M.updt_annot_pos(parent_buf_path, old_extmark_ln, new_extmark_ln)
+    annots_tbl:update({
+        set = {
+            extmark_ln = new_extmark_ln
+        },
+        where = {
+            buf_full_path = parent_buf_path,
+            extmark_ln = old_extmark_ln
+        }
+    })
+end
+
 function M.del_annot(parent_buf_path, extmark_ln)
     annots_tbl:remove({
         where = {
