@@ -126,10 +126,8 @@ local function monitor_buf(extmark_parent_buf)
     })
 end
 
--- TODO: need to ensure this functionality is triggered in cases where no extmarks exist and
--- the user has to just create them; otherwise, buffer is not monitored even after extmarks created
--- should this be inside of an autocmd instead?
 function M.set_annotations()
+-- local function set_annotations()
     local cwd = '^' .. vim.fn.getcwd()
     local buf_info = vim.fn.getbufinfo()
     -- set annotations per open buffer
@@ -138,11 +136,23 @@ function M.set_annotations()
         if string.match(buf.name, cwd) and vim.fn.bufexists(buf.bufnr) and buf.listed == 1 then
             curr_extmarks[buf.bufnr] = set_buf_annotations(buf.bufnr)
             monitor_buf(buf.bufnr)
-        -- else
-        --     print('No buffers to hold annotations')
         end
     end
 end
+
+-- TODO: need to ensure this functionality is triggered in cases where no extmarks exist and
+-- the user has to just create them; otherwise, buffer is not monitored even after extmarks created
+-- should this be inside of an autocmd instead?
+local au_group_set = vim.api.nvim_create_augroup('AnnotateSet', {clear=true})
+vim.api.nvim_create_autocmd({'BufAdd'}, {
+    callback = function()
+        -- set_annotations()
+        print('Entered Neovim')
+    end,
+    group = au_group_set,
+    pattern = '*'
+
+})
 
 function M.create_annotation()
     local extmark_parent_win = vim.api.nvim_get_current_win()
@@ -175,7 +185,7 @@ function M.create_annotation()
         vim.api.nvim_buf_set_extmark(extmark_parent_buf, ns, cursor_ln, 0, {
             id = mark_id,
             sign_text = '󰍕',
-            sign_hl_group = 'Error'
+            sign_hl_group = 'FloatBorder'
         })
         -- print('Fetched existing annotation')
     end
@@ -184,9 +194,9 @@ function M.create_annotation()
     -- other events to consider:
     -- WinClosed, WinLeave (BufLeave is executed before it)
     -- TODO: saving to DB should only happen if the annotation buffer actually has mods --> vim.api.nvim_buf_attach()
-    local au_group = vim.api.nvim_create_augroup('Annotate', {clear=true})
+    local au_group_edit = vim.api.nvim_create_augroup('AnnotateEdit', {clear=true})
     vim.api.nvim_create_autocmd('BufHidden', {
-        callback=function()
+        callback = function()
             local empty_lines = check_annot_buf_empty(annot_buf)
             local curr_mark
             if empty_lines then
@@ -213,7 +223,7 @@ function M.create_annotation()
                 sign_hl_group = 'comment'
             })
         end,
-        group=au_group,
+        group=au_group_edit,
         buffer=annot_buf
     })
 end
@@ -239,7 +249,7 @@ function M.delete_annotation()
         vim.api.nvim_buf_set_extmark(extmark_parent_buf, ns, cursor_ln, 0, {
             id = mark_id,
             sign_text = '󰍕',
-            sign_hl_group = 'Error'
+            sign_hl_group = 'FloatBorder'
         })
 
         -- TODO: I *think* this is proper use of vim.schedule? intent: schedule prompt for after window shown
