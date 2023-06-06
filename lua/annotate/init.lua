@@ -98,9 +98,6 @@ local function monitor_buf(extmark_parent_buf)
     vim.api.nvim_buf_attach(extmark_parent_buf, false, {
         on_lines = function(_, _, _, _, _)
             local parent_buf_path = vim.api.nvim_buf_get_name(extmark_parent_buf)
-            -- print('Callback fired from bufnr: ', extmark_parent_buf)
-            -- print('Current extmarks:')
-            -- print(vim.inspect(curr_extmarks))
             vim.schedule(function()
                 local mod_extmarks = vim.api.nvim_buf_get_extmarks(extmark_parent_buf, ns, 0, -1, {})
                 -- for each extmark for current buf
@@ -117,10 +114,7 @@ local function monitor_buf(extmark_parent_buf)
                             break
                         end
                     end
-                    -- db.updt_annot_pos(parent_buf_path, ln1, curr_extmarks[extmark_parent_buf][i][2])
                 end
-                -- print('Updated extmarks:')
-                -- print(vim.inspect(curr_extmarks))
             end)
         end
     })
@@ -139,20 +133,6 @@ function M.set_annotations()
         end
     end
 end
-
--- TODO: need to ensure this functionality is triggered in cases where no extmarks exist and
--- the user has to just create them; otherwise, buffer is not monitored even after extmarks created
--- should this be inside of an autocmd instead?
--- local au_group_set = vim.api.nvim_create_augroup('AnnotateSet', {clear=true})
--- vim.api.nvim_create_autocmd({'BufAdd'}, {
---     callback = function()
---         -- set_annotations()
---         print('Entered Neovim')
---     end,
---     group = au_group_set,
---     pattern = '*'
---
--- })
 
 function M.create_annotation()
     local extmark_parent_win = vim.api.nvim_get_current_win()
@@ -281,8 +261,12 @@ local default_opts = {
 }
 function M.setup(opts)
     M.config = vim.tbl_deep_extend('force', default_opts, opts or {})
+    -- TODO: now this is getting set since we run the setup function in Lazy
+    -- just have to hook into M.set_annotations() and check logic to make sure
+    -- we're setting the extmarks immediately
+    -- also change event(s) to something better?
     local au_group_set = vim.api.nvim_create_augroup('AnnotateSet', {clear=true})
-    vim.api.nvim_create_autocmd({'BufAdd', 'BufEnter'}, {
+    vim.api.nvim_create_autocmd({'BufAdd'}, {
         callback = function()
             print('Setup autocmd fired')
         end,
