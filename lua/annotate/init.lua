@@ -94,36 +94,48 @@ local function set_buf_annotations(extmark_parent_buf)
     return existing_extmarks
 end
 
--- TODO: should be global?
 local curr_extmarks = {}
+local curr_extmark_bufs = {}
+
+function M.show_extmark_bufs()
+    print(vim.inspect(curr_extmark_bufs))
+end
 
 local function monitor_buf(extmark_parent_buf)
     local ns = vim.api.nvim_create_namespace('annotate')
-    -- TODO: check here if already attached to that buf?
-    vim.api.nvim_buf_attach(extmark_parent_buf, false, {
-        on_lines = function(_, _, _, _, _)
-            local parent_buf_path = vim.api.nvim_buf_get_name(extmark_parent_buf)
-            vim.schedule(function()
-                local mod_extmarks = vim.api.nvim_buf_get_extmarks(extmark_parent_buf, ns, 0, -1, {})
-                -- for each extmark for current buf
-                for i, extmark1 in ipairs(curr_extmarks[extmark_parent_buf]) do
-                    local id1 = extmark1[1]
-                    local ln1 = extmark1[2]
-                    -- for each extmark in the latest list of entries
-                    for _, extmark2 in ipairs(mod_extmarks) do
-                        local id2 = extmark2[1]
-                        local ln2 = extmark2[2]
-                        if id1 == id2 and ln1 ~= ln2 then
-                            curr_extmarks[extmark_parent_buf][i] = extmark2
-                            db.updt_annot_pos(parent_buf_path, ln1, ln2)
-                            break
+    local is_extmark_buf = false
+    for _, bufnr in ipairs(curr_extmark_bufs) do
+        if extmark_parent_buf == bufnr then
+            is_extmark_buf = true
+        end
+    end
+    if not is_extmark_buf then
+        vim.api.nvim_buf_attach(extmark_parent_buf, false, {
+            on_lines = function(_, _, _, _, _)
+                local parent_buf_path = vim.api.nvim_buf_get_name(extmark_parent_buf)
+                vim.schedule(function()
+                    local mod_extmarks = vim.api.nvim_buf_get_extmarks(extmark_parent_buf, ns, 0, -1, {})
+                    -- for each extmark for current buf
+                    for i, extmark1 in ipairs(curr_extmarks[extmark_parent_buf]) do
+                        local id1 = extmark1[1]
+                        local ln1 = extmark1[2]
+                        -- for each extmark in the latest list of entries
+                        for _, extmark2 in ipairs(mod_extmarks) do
+                            local id2 = extmark2[1]
+                            local ln2 = extmark2[2]
+                            if id1 == id2 and ln1 ~= ln2 then
+                                curr_extmarks[extmark_parent_buf][i] = extmark2
+                                db.updt_annot_pos(parent_buf_path, ln1, ln2)
+                                break
+                            end
                         end
                     end
-                end
-                print('Attached to bufnr', extmark_parent_buf)
-            end)
-        end
-    })
+                end)
+            end
+        })
+        table.insert(curr_extmark_bufs, extmark_parent_buf)
+        print('Monitoring bufnr ', extmark_parent_buf)
+    end
 end
 
 -- function M.set_annotations()
@@ -201,8 +213,8 @@ function M.create_annotation()
                     sign_text = M.config.annot_sign,
                     sign_hl_group = M.config.annot_sign_hl
                 })
-                -- TODO: initiate monitoring for this buffer here
                 monitor_buf(extmark_parent_buf)
+                print('Bufnr ', extmark_parent_buf, ' sent for monitoring')
             end
         end,
         group=au_group_edit,
