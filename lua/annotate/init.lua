@@ -98,11 +98,9 @@ local function monitor_buf(extmark_parent_buf)
     vim.api.nvim_buf_attach(extmark_parent_buf, false, {
         on_lines = function(_, _, _, _, _)
             local parent_buf_path = vim.api.nvim_buf_get_name(extmark_parent_buf)
-            print('Callback fired from bufnr: ', extmark_parent_buf)
-            print('Current extmarks:')
-            print(vim.inspect(curr_extmarks))
-            -- reminder that curr_extmark is like
-            -- {[bufnr] = {{id, row, col}, {id, row, col}}, ...}
+            -- print('Callback fired from bufnr: ', extmark_parent_buf)
+            -- print('Current extmarks:')
+            -- print(vim.inspect(curr_extmarks))
             vim.schedule(function()
                 local mod_extmarks = vim.api.nvim_buf_get_extmarks(extmark_parent_buf, ns, 0, -1, {})
                 -- for each extmark for current buf
@@ -114,68 +112,43 @@ local function monitor_buf(extmark_parent_buf)
                         local id2 = extmark2[1]
                         local ln2 = extmark2[2]
                         if id1 == id2 and ln1 ~= ln2 then
-                            -- print('Old:')
-                            -- print(vim.inspect(curr_extmarks[extmark_parent_buf][i]))
-                            -- print('New:')
-                            -- print(vim.inspect(extmark2))
                             curr_extmarks[extmark_parent_buf][i] = extmark2
+                            db.updt_annot_pos(parent_buf_path, ln1, ln2)
                             break
                         end
                     end
-                    -- now flush to DB once extmark1 has completed its checking/updating
-                    -- print('Replacing ', ln1)
-                    -- print('with ', curr_extmarks[extmark_parent_buf][i][2])
-                    db.updt_annot_pos(parent_buf_path, ln1, curr_extmarks[extmark_parent_buf][i][2])
+                    -- db.updt_annot_pos(parent_buf_path, ln1, curr_extmarks[extmark_parent_buf][i][2])
                 end
-                print('Updated extmarks:')
-                print(vim.inspect(curr_extmarks))
+                -- print('Updated extmarks:')
+                -- print(vim.inspect(curr_extmarks))
             end)
         end
     })
 end
 
--- TODO: define autocommand here that will flush the contents of curr_extmark to DB?
--- reminder that curr_extmark is like
--- {[bufnr] = {{id, row, col}, {id, row, col}}, ...}
--- however, at that point we'd have no knowledge of which record in DB to update
--- so might have to do the DB at the point that we have the old position and use it as
--- the query condition
--- addtl benefit is that assumption of only one extmark per line guarantees we're always 
--- querying the correct record when using extmark_ln?
+-- TODO: need to ensure this functionality is triggered in cases where no extmarks exist and
+-- the user has to just create them; otherwise, buffer is not monitored even after extmarks created
+-- should this be inside of an autocmd instead?
 function M.set_annotations()
     local cwd = '^' .. vim.fn.getcwd()
     local buf_info = vim.fn.getbufinfo()
+    -- set annotations per open buffer
     for _, buf in ipairs(buf_info) do
-        if string.match(buf.name, cwd) and vim.fn.bufexists(buf.bufnr) then
+        -- TODO: are these conditions good enough?
+        if string.match(buf.name, cwd) and vim.fn.bufexists(buf.bufnr) and buf.listed == 1 then
             curr_extmarks[buf.bufnr] = set_buf_annotations(buf.bufnr)
             monitor_buf(buf.bufnr)
+        -- else
+        --     print('No buffers to hold annotations')
         end
     end
-end
-
--- TODO: delete this helper too
-function M.list_annotations()
-    local namespace = vim.api.nvim_create_namespace('annotate')
-    local marks = vim.api.nvim_buf_get_extmarks(0, namespace, 0, -1, {})
-    P(marks)
-end
-
--- TODO: only for debugging (remove when done)
-function M.check_line()
-    local extmark_parent_win = vim.api.nvim_get_current_win()
-    local extmark_parent_buf = vim.api.nvim_win_get_buf(extmark_parent_win)
-    local cursor_ln = vim.api.nvim_win_get_cursor(extmark_parent_win)[1] - 1
-    local ns = vim.api.nvim_create_namespace('annotate')
-    local existing_extmark = vim.api.nvim_buf_get_extmarks(extmark_parent_buf, ns, {cursor_ln, 0}, {cursor_ln, 0}, {})
-    P(existing_extmark)
-    print('Cursor @ ', cursor_ln + 1)
 end
 
 function M.create_annotation()
     local extmark_parent_win = vim.api.nvim_get_current_win()
     local extmark_parent_buf = vim.api.nvim_win_get_buf(extmark_parent_win)
     local parent_buf_path = vim.api.nvim_buf_get_name(extmark_parent_buf)
-    local cursor_ln = vim.api.nvim_win_get_cursor(extmark_parent_win)[1] - 1 -- 1-based lines conv to 0-based for extmarks
+    local cursor_ln = vim.api.nvim_win_get_cursor(extmark_parent_win)[1] - 1 -- 1-based lines conv to 0-based
     local ns = vim.api.nvim_create_namespace('annotate')
     -- TODO: use webdevicons as default or allow config?
     local opts = {
@@ -289,6 +262,24 @@ function M.delete_annotation()
             end
         end)
     end
+end
+
+-- TODO: delete this helper too
+function M.list_annotations()
+    local namespace = vim.api.nvim_create_namespace('annotate')
+    local marks = vim.api.nvim_buf_get_extmarks(0, namespace, 0, -1, {})
+    P(marks)
+end
+
+-- TODO: only for debugging (remove when done)
+function M.check_line()
+    local extmark_parent_win = vim.api.nvim_get_current_win()
+    local extmark_parent_buf = vim.api.nvim_win_get_buf(extmark_parent_win)
+    local cursor_ln = vim.api.nvim_win_get_cursor(extmark_parent_win)[1] - 1
+    local ns = vim.api.nvim_create_namespace('annotate')
+    local existing_extmark = vim.api.nvim_buf_get_extmarks(extmark_parent_buf, ns, {cursor_ln, 0}, {cursor_ln, 0}, {})
+    P(existing_extmark)
+    print('Cursor @ ', cursor_ln + 1)
 end
 
 return M
