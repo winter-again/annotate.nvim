@@ -71,8 +71,8 @@ local function set_buf_annotations(extmark_parent_buf)
     if next(existing_extmarks) == nil then
         -- TODO: should these options just be set globally?
         local opts = {
-            sign_text='󰍕',
-            sign_hl_group = 'comment'
+            sign_text = M.config.annot_sign,
+            sign_hl_group = M.config.annot_sign_hl
         }
         local extmark_tbl = db.get_all_annot(parent_buf_path)
         if next(extmark_tbl) == nil then
@@ -143,16 +143,16 @@ end
 -- TODO: need to ensure this functionality is triggered in cases where no extmarks exist and
 -- the user has to just create them; otherwise, buffer is not monitored even after extmarks created
 -- should this be inside of an autocmd instead?
-local au_group_set = vim.api.nvim_create_augroup('AnnotateSet', {clear=true})
-vim.api.nvim_create_autocmd({'BufAdd'}, {
-    callback = function()
-        -- set_annotations()
-        print('Entered Neovim')
-    end,
-    group = au_group_set,
-    pattern = '*'
-
-})
+-- local au_group_set = vim.api.nvim_create_augroup('AnnotateSet', {clear=true})
+-- vim.api.nvim_create_autocmd({'BufAdd'}, {
+--     callback = function()
+--         -- set_annotations()
+--         print('Entered Neovim')
+--     end,
+--     group = au_group_set,
+--     pattern = '*'
+--
+-- })
 
 function M.create_annotation()
     local extmark_parent_win = vim.api.nvim_get_current_win()
@@ -162,8 +162,8 @@ function M.create_annotation()
     local ns = vim.api.nvim_create_namespace('annotate')
     -- TODO: use webdevicons as default or allow config?
     local opts = {
-        sign_text = '󰍕',
-        sign_hl_group = 'comment'
+        sign_text = M.config.annot_sign,
+        sign_hl_group = M.config.annot_sign_hl
     }
     local existing_extmark = vim.api.nvim_buf_get_extmarks(extmark_parent_buf, ns, {cursor_ln, 0}, {cursor_ln, 0}, {})
     -- TODO: fig out if mark_id is useful
@@ -184,8 +184,8 @@ function M.create_annotation()
         -- TODO: clean this up to use desired hl group, symbol, etc.
         vim.api.nvim_buf_set_extmark(extmark_parent_buf, ns, cursor_ln, 0, {
             id = mark_id,
-            sign_text = '󰍕',
-            sign_hl_group = 'FloatBorder'
+            sign_text = M.config.annot_sign,
+            sign_hl_group = M.config.annot_sign_hl_current
         })
         -- print('Fetched existing annotation')
     end
@@ -219,8 +219,8 @@ function M.create_annotation()
             -- TODO: clean this up too
             vim.api.nvim_buf_set_extmark(extmark_parent_buf, ns, cursor_ln, 0, {
                 id = curr_mark,
-                sign_text = '󰍕',
-                sign_hl_group = 'comment'
+                sign_text = M.config.annot_sign,
+                sign_hl_group = M.config.annot_sign_hl
             })
         end,
         group=au_group_edit,
@@ -248,8 +248,8 @@ function M.delete_annotation()
         -- TODO: clean this up too
         vim.api.nvim_buf_set_extmark(extmark_parent_buf, ns, cursor_ln, 0, {
             id = mark_id,
-            sign_text = '󰍕',
-            sign_hl_group = 'FloatBorder'
+            sign_text = M.config.annot_sign,
+            sign_hl_group = M.config.annot_sign_hl
         })
 
         -- TODO: I *think* this is proper use of vim.schedule? intent: schedule prompt for after window shown
@@ -272,6 +272,23 @@ function M.delete_annotation()
             end
         end)
     end
+end
+
+local default_opts = {
+    annot_sign = '󰍕',
+    annot_sign_hl = 'Comment',
+    annot_sign_hl_current = 'FloatBorder'
+}
+function M.setup(opts)
+    M.config = vim.tbl_deep_extend('force', default_opts, opts or {})
+    local au_group_set = vim.api.nvim_create_augroup('AnnotateSet', {clear=true})
+    vim.api.nvim_create_autocmd({'VimEnter'}, {
+        callback = function()
+            print('Setup autocmd fired')
+        end,
+        group = au_group_set,
+        pattern = '*'
+    })
 end
 
 -- TODO: delete this helper too
