@@ -32,17 +32,18 @@ local function create_annot_buf(cursor_ln)
         vim.api.nvim_buf_set_name(annot_buf, annot_buf_name)
         vim.api.nvim_buf_set_keymap(annot_buf, 'n', 'q', ':close<CR>', {noremap=true, silent=true, nowait=true})
         annot_win = create_annot_win(annot_buf, cursor_ln, extmark_parent_win, win_width, padding)
-        print('Existing buffer + window don\'t exist: ', annot_buf, annot_win)
+        -- print('Existing buffer + window don\'t exist: ', annot_buf, annot_win)
     else
         vim.api.nvim_buf_set_lines(annot_buf, 0, -1, true, {})
         vim.api.nvim_buf_set_keymap(annot_buf, 'n', 'q', ':close<CR>', {noremap=true, silent=true, nowait=true})
         annot_win = create_annot_win(annot_buf, cursor_ln, extmark_parent_win, win_width, padding)
-        print('Fetched existing buffer + window: ', annot_buf, annot_win)
+        -- print('Fetched existing buffer + window: ', annot_buf, annot_win)
     end
     return annot_buf, annot_win
 end
 
 -- TODO: test this gmatch with weirder cases?
+-- TODO: consider things like stripping leading/trailing whitespaces?
 local function build_annot(annot_txt)
     local annot_lines = {}
     for line in string.gmatch(annot_txt .. '``', '([^``]*)``') do
@@ -108,18 +109,14 @@ local function monitor_buf(extmark_parent_buf)
                 local parent_buf_path = vim.api.nvim_buf_get_name(extmark_parent_buf)
                 vim.schedule(function()
                     local mod_extmarks = vim.api.nvim_buf_get_extmarks(extmark_parent_buf, ns, 0, -1, {})
-                    -- for each extmark for current buf
                     for i, extmark1 in ipairs(curr_extmarks[extmark_parent_buf]) do
                         local id1 = extmark1[1]
                         local ln1 = extmark1[2]
-                        -- for each extmark in the latest list of entries
                         for _, extmark2 in ipairs(mod_extmarks) do
                             local id2 = extmark2[1]
                             local ln2 = extmark2[2]
                             if id1 == id2 and ln1 ~= ln2 then
                                 curr_extmarks[extmark_parent_buf][i] = extmark2
-                                -- TODO: sometimes firing errors about NOT NULL constraint failing
-                                print('Updating from ', parent_buf_path)
                                 db.updt_annot_pos(parent_buf_path, ln1, ln2)
                                 break
                             end
@@ -136,11 +133,9 @@ local function monitor_buf(extmark_parent_buf)
 end
 
 -- TODO: do we want to trigger all of this when no annotations exist for buf?
--- function M.set_annotations()
 local function set_annotations()
     local cwd = '^' .. vim.fn.getcwd()
     local buf_info = vim.fn.getbufinfo()
-    -- set annotations per open buffer
     for _, buf in ipairs(buf_info) do
         -- TODO: are these conditions the best to check?
         if string.match(buf.name, cwd) and vim.fn.bufexists(buf.bufnr) and buf.listed == 1 then
@@ -156,27 +151,19 @@ function M.create_annotation()
     local parent_buf_path = vim.api.nvim_buf_get_name(extmark_parent_buf)
     local cursor_ln = vim.api.nvim_win_get_cursor(extmark_parent_win)[1] - 1
     local ns = vim.api.nvim_create_namespace('annotate')
-    -- local opts = {
-    --     sign_text = M.config.annot_sign,
-    --     sign_hl_group = M.config.annot_sign_hl
-    -- }
     local existing_extmark = vim.api.nvim_buf_get_extmarks(extmark_parent_buf, ns, {cursor_ln, 0}, {cursor_ln, 0}, {})
     local mark_id
     local annot_buf
     local is_updt
 
-    -- creation and display of floating window
     annot_buf, _ = create_annot_buf(cursor_ln)
-    if next(existing_extmark) == nil then -- no existing extmark on this line so annot_buf will be empty
-        -- annot_buf, _ = create_annot_buf(cursor_ln)
+    if next(existing_extmark) == nil then
         is_updt = false
-    else -- extmark exists on this line, so fetch the annotation and display it
+    else
         mark_id = existing_extmark[1][1]
         local annot_txt = db.get_annot(parent_buf_path, cursor_ln)[1]['text']
         local annot_lines = build_annot(annot_txt)
-        -- annot_buf, _ = create_annot_buf(cursor_ln)
         vim.api.nvim_buf_set_lines(annot_buf, 0, -1, false, annot_lines)
-        -- highlight current extmark
         vim.api.nvim_buf_set_extmark(extmark_parent_buf, ns, cursor_ln, 0, {
             id = mark_id,
             sign_text = M.config.annot_sign,
@@ -213,7 +200,6 @@ function M.create_annotation()
                     })
                     print('Created new annotation. is_updt: ', is_updt)
                 end
-                -- return to regular highlighting
                 vim.api.nvim_buf_set_extmark(extmark_parent_buf, ns, cursor_ln, 0, {
                     id = curr_mark,
                     sign_text = M.config.annot_sign,
@@ -245,7 +231,6 @@ function M.delete_annotation()
         local annot_buf, annot_win = create_annot_buf(cursor_ln)
         mark_id = existing_extmark[1][1]
         vim.api.nvim_buf_set_lines(annot_buf, 0, -1, false, annot_lines)
-        -- TODO: clean this up too
         vim.api.nvim_buf_set_extmark(extmark_parent_buf, ns, cursor_ln, 0, {
             id = mark_id,
             sign_text = M.config.annot_sign,
@@ -264,7 +249,7 @@ function M.delete_annotation()
                 -- trying just deleting the autogroup...seems like a hacky way
                 -- other option that seems to work is vim.cmd('noautocmd') to disable autocmds for one command
                 -- unsure how pecific though, so side-effects?
-                vim.api.nvim_del_augroup_by_name('Annotate')
+                vim.api.nvim_del_augroup_by_name('AnnotateEdit')
                 -- vim.cmd('noautocmd')
                 vim.api.nvim_win_hide(annot_win)
             else
