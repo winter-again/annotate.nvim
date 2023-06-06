@@ -118,6 +118,8 @@ local function monitor_buf(extmark_parent_buf)
                             local ln2 = extmark2[2]
                             if id1 == id2 and ln1 ~= ln2 then
                                 curr_extmarks[extmark_parent_buf][i] = extmark2
+                                -- TODO: sometimes firing errors about NOT NULL constraint failing
+                                print('Updating from ', parent_buf_path)
                                 db.updt_annot_pos(parent_buf_path, ln1, ln2)
                                 break
                             end
