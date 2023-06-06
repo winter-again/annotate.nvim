@@ -63,84 +63,12 @@ local function check_annot_buf_empty(annot_buf)
     return empty_lines
 end
 
--- TODO: should this function be auto-called when the plugin is started?
-local function set_buf_annotations(extmark_parent_buf)
-    local parent_buf_path = vim.api.nvim_buf_get_name(extmark_parent_buf)
-    local ns = vim.api.nvim_create_namespace('annotate')
-    local existing_extmarks = vim.api.nvim_buf_get_extmarks(extmark_parent_buf, ns, 0, -1, {})
-    if next(existing_extmarks) == nil then
-        -- TODO: should these options just be set globally?
-        local opts = {
-            sign_text = M.config.annot_sign,
-            sign_hl_group = M.config.annot_sign_hl
-        }
-        local extmark_tbl = db.get_all_annot(parent_buf_path)
-        if next(extmark_tbl) == nil then
-            print('No annotations exist for this file')
-        else
-            for _, row in ipairs(extmark_tbl) do
-                vim.api.nvim_buf_set_extmark(extmark_parent_buf, ns, row['extmark_ln'], 0, opts)
-            end
-            existing_extmarks = vim.api.nvim_buf_get_extmarks(extmark_parent_buf, ns, 0, -1, {})
-            print('Existing annotations set for bufnr: ', extmark_parent_buf)
-        end
-    else
-        -- TODO: should there be additional functionality here?
-        print('Annotations already set for bufnr: ', extmark_parent_buf)
-    end
-    return existing_extmarks
-end
-
-curr_extmarks = {}
-
-local function monitor_buf(extmark_parent_buf)
-    local ns = vim.api.nvim_create_namespace('annotate')
-    vim.api.nvim_buf_attach(extmark_parent_buf, false, {
-        on_lines = function(_, _, _, _, _)
-            local parent_buf_path = vim.api.nvim_buf_get_name(extmark_parent_buf)
-            vim.schedule(function()
-                local mod_extmarks = vim.api.nvim_buf_get_extmarks(extmark_parent_buf, ns, 0, -1, {})
-                -- for each extmark for current buf
-                for i, extmark1 in ipairs(curr_extmarks[extmark_parent_buf]) do
-                    local id1 = extmark1[1]
-                    local ln1 = extmark1[2]
-                    -- for each extmark in the latest list of entries
-                    for _, extmark2 in ipairs(mod_extmarks) do
-                        local id2 = extmark2[1]
-                        local ln2 = extmark2[2]
-                        if id1 == id2 and ln1 ~= ln2 then
-                            curr_extmarks[extmark_parent_buf][i] = extmark2
-                            db.updt_annot_pos(parent_buf_path, ln1, ln2)
-                            break
-                        end
-                    end
-                end
-            end)
-        end
-    })
-end
-
-function M.set_annotations()
--- local function set_annotations()
-    local cwd = '^' .. vim.fn.getcwd()
-    local buf_info = vim.fn.getbufinfo()
-    -- set annotations per open buffer
-    for _, buf in ipairs(buf_info) do
-        -- TODO: are these conditions good enough?
-        if string.match(buf.name, cwd) and vim.fn.bufexists(buf.bufnr) and buf.listed == 1 then
-            curr_extmarks[buf.bufnr] = set_buf_annotations(buf.bufnr)
-            monitor_buf(buf.bufnr)
-        end
-    end
-end
-
 function M.create_annotation()
     local extmark_parent_win = vim.api.nvim_get_current_win()
     local extmark_parent_buf = vim.api.nvim_win_get_buf(extmark_parent_win)
     local parent_buf_path = vim.api.nvim_buf_get_name(extmark_parent_buf)
     local cursor_ln = vim.api.nvim_win_get_cursor(extmark_parent_win)[1] - 1 -- 1-based lines conv to 0-based
     local ns = vim.api.nvim_create_namespace('annotate')
-    -- TODO: use webdevicons as default or allow config?
     local opts = {
         sign_text = M.config.annot_sign,
         sign_hl_group = M.config.annot_sign_hl
@@ -241,7 +169,7 @@ function M.delete_annotation()
                 db.del_annot(parent_buf_path, cursor_ln)
                 print('Deleted successfully')
                 -- TODO: this seems to trigger the BufHidden autocmd and deletion doesn't happen correctly
-                -- trying just deleting the autogroup...should be restored by create func?
+                -- trying just deleting the autogroup...seems like a hacky way
                 -- other option that seems to work is vim.cmd('noautocmd') to disable autocmds for one command
                 -- unsure how pecific though, so side-effects?
                 vim.api.nvim_del_augroup_by_name('Annotate')
@@ -254,21 +182,99 @@ function M.delete_annotation()
     end
 end
 
+local function set_buf_annotations(extmark_parent_buf)
+    local parent_buf_path = vim.api.nvim_buf_get_name(extmark_parent_buf)
+    local ns = vim.api.nvim_create_namespace('annotate')
+    local existing_extmarks = vim.api.nvim_buf_get_extmarks(extmark_parent_buf, ns, 0, -1, {})
+    -- TODO: use this check to prevent repeating things when autocmd is fired past the first time?
+    -- if extmarks don't already exist in this buf
+    if next(existing_extmarks) == nil then
+        local opts = {
+            sign_text = M.config.annot_sign,
+            sign_hl_group = M.config.annot_sign_hl
+        }
+        local extmark_tbl = db.get_all_annot(parent_buf_path)
+        -- if we don't have record of extmarks for this buf
+        if next(extmark_tbl) == nil then
+            print('No annotations exist for this file')
+        -- if we DO have record of some extmarks for this buf
+        else
+            for _, row in ipairs(extmark_tbl) do
+                vim.api.nvim_buf_set_extmark(extmark_parent_buf, ns, row['extmark_ln'], 0, opts)
+            end
+            existing_extmarks = vim.api.nvim_buf_get_extmarks(extmark_parent_buf, ns, 0, -1, {})
+            print('Existing annotations set for bufnr: ', extmark_parent_buf)
+        end
+    -- if extmarks were already set
+    else
+        -- TODO: should there be additional functionality here?
+        print('Annotations already set for bufnr: ', extmark_parent_buf)
+    end
+    return existing_extmarks
+end
+
+-- TODO: should be global?
+local curr_extmarks = {}
+
+local function monitor_buf(extmark_parent_buf)
+    local ns = vim.api.nvim_create_namespace('annotate')
+    -- TODO: check here if already attached to that buf
+    vim.api.nvim_buf_attach(extmark_parent_buf, false, {
+        on_lines = function(_, _, _, _, _)
+            local parent_buf_path = vim.api.nvim_buf_get_name(extmark_parent_buf)
+            vim.schedule(function()
+                local mod_extmarks = vim.api.nvim_buf_get_extmarks(extmark_parent_buf, ns, 0, -1, {})
+                -- for each extmark for current buf
+                for i, extmark1 in ipairs(curr_extmarks[extmark_parent_buf]) do
+                    local id1 = extmark1[1]
+                    local ln1 = extmark1[2]
+                    -- for each extmark in the latest list of entries
+                    for _, extmark2 in ipairs(mod_extmarks) do
+                        local id2 = extmark2[1]
+                        local ln2 = extmark2[2]
+                        if id1 == id2 and ln1 ~= ln2 then
+                            curr_extmarks[extmark_parent_buf][i] = extmark2
+                            db.updt_annot_pos(parent_buf_path, ln1, ln2)
+                            break
+                        end
+                    end
+                end
+            end)
+        end
+    })
+end
+
+-- function M.set_annotations()
+local function set_annotations()
+    local cwd = '^' .. vim.fn.getcwd()
+    local buf_info = vim.fn.getbufinfo()
+    -- set annotations per open buffer
+    for _, buf in ipairs(buf_info) do
+        -- TODO: are these conditions the best to check?
+        if string.match(buf.name, cwd) and vim.fn.bufexists(buf.bufnr) and buf.listed == 1 then
+            curr_extmarks[buf.bufnr] = set_buf_annotations(buf.bufnr)
+            monitor_buf(buf.bufnr)
+        end
+    end
+end
+
+-- TODO: is there a better way to specify/config hl? or how do we set a sensible default at least
+-- TODO: use webdevicons for symbol instead?
 local default_opts = {
     annot_sign = '󰍕',
     annot_sign_hl = 'Comment',
     annot_sign_hl_current = 'FloatBorder'
 }
+
 function M.setup(opts)
     M.config = vim.tbl_deep_extend('force', default_opts, opts or {})
-    -- TODO: now this is getting set since we run the setup function in Lazy
-    -- just have to hook into M.set_annotations() and check logic to make sure
-    -- we're setting the extmarks immediately
-    -- also change event(s) to something better?
+    -- TODO: use a better event? make it run the setting and monitoring functionality
+    -- considering BufAdd, BufReadPre, BufReadPost, and BufNew
     local au_group_set = vim.api.nvim_create_augroup('AnnotateSet', {clear=true})
-    vim.api.nvim_create_autocmd({'BufAdd'}, {
+    vim.api.nvim_create_autocmd({'BufReadPost'}, {
         callback = function()
-            print('Setup autocmd fired')
+            -- print('Setup autocmd fired')
+            set_annotations()
         end,
         group = au_group_set,
         pattern = '*'
