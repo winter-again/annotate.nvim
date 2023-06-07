@@ -128,15 +128,18 @@ end
 local function monitor_buf(extmark_parent_buf)
     local ns = vim.api.nvim_create_namespace('annotate')
     local is_monitored_buf = false
-    for _, bufnr in ipairs(curr_extmark_bufs) do
+    for bufnr, _ in pairs(curr_extmark_bufs) do
         if extmark_parent_buf == bufnr then
             is_monitored_buf = true
             break
         end
     end
-    -- TODO: we seem to monitor bufs already monitoring
     if not is_monitored_buf then
         local initial_line_ct = vim.api.nvim_buf_line_count(extmark_parent_buf)
+        -- table.insert(curr_extmark_bufs, extmark_parent_buf)
+        curr_extmark_bufs[extmark_parent_buf] = initial_line_ct
+        print('Monitoring bufnr ', extmark_parent_buf, is_monitored_buf)
+        -- print('Init line count: ', curr_extmark_bufs[extmark_parent_buf])
         vim.api.nvim_buf_attach(extmark_parent_buf, false, {
             on_lines = function(_, _, _, first_line, last_line)
                 local parent_buf_path = vim.api.nvim_buf_get_name(extmark_parent_buf)
@@ -182,12 +185,8 @@ local function monitor_buf(extmark_parent_buf)
                 end)
             end
         })
-        -- table.insert(curr_extmark_bufs, extmark_parent_buf)
-        curr_extmark_bufs[extmark_parent_buf] = initial_line_ct
-        print('Monitoring bufnr ', extmark_parent_buf)
-        -- print('Init line count: ', curr_extmark_bufs[extmark_parent_buf])
     else
-        print('Already monitoring bufnr ', extmark_parent_buf)
+        print('Already monitoring bufnr ', extmark_parent_buf, is_monitored_buf)
     end
 end
 
