@@ -2,7 +2,7 @@
 
 **Please note that this plugin is still WIP & unstable. Feel free to open an issue with any bugs or implementation suggestions.**
 
-A simple plugin for creating and storing code annotations. It uses Neovim's extended marks and a [SQLite database](https://github.com/kkharji/sqlite.lua) to store annotation information.
+A plugin for creating and storing notes (annotations) related to a line of code/text. It uses Neovim's extended marks and a [SQLite database](https://github.com/kkharji/sqlite.lua) to store annotation information.
 
 ## Installation & configuration
 
