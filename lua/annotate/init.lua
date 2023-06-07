@@ -68,7 +68,6 @@ local function set_buf_annotations(extmark_parent_buf)
     local parent_buf_path = vim.api.nvim_buf_get_name(extmark_parent_buf)
     local ns = vim.api.nvim_create_namespace('annotate')
     local existing_extmarks = vim.api.nvim_buf_get_extmarks(extmark_parent_buf, ns, 0, -1, {})
-    -- TODO: use this check to prevent repeating things when autocmd is fired past the first time?
     if next(existing_extmarks) == nil then
         local extmark_tbl = db.get_all_annot(parent_buf_path)
         if next(extmark_tbl) == nil then
@@ -94,6 +93,37 @@ end
 local curr_extmarks = {}
 local curr_extmark_bufs = {}
 
+-- TODO: clean up and consider make it useable from M.delete_annotation() or if there's
+-- a better way to do it
+local function prompt_delete(extmark_parent_buf, extmark_id, extmark_ln)
+    local ns = vim.api.nvim_create_namespace('annotate')
+    local parent_buf_path = vim.api.nvim_buf_get_name(extmark_parent_buf)
+    local annot_txt = db.get_annot(parent_buf_path, extmark_ln)[1]['text']
+    local annot_lines = build_annot(annot_txt)
+    local annot_buf, annot_win = create_annot_buf(extmark_ln + 1)
+    vim.api.nvim_buf_set_lines(annot_buf, 0, -1, false, annot_lines)
+    vim.api.nvim_buf_set_extmark(extmark_parent_buf, ns, extmark_ln + 1, 0, {
+        id = extmark_id,
+        sign_text = M.config.annot_sign,
+        sign_hl_group = M.config.annot_sign_hl_current
+    })
+    -- TODO: I *think* this is proper use of vim.schedule? intent: schedule prompt for after window shown
+    vim.schedule(function()
+        local confirm = vim.fn.input('Are you sure you want to delete this annotation? (y/n): ')
+        if confirm:lower() == 'y' then
+            -- local mark_id = existing_extmark[1][1]
+            vim.api.nvim_buf_del_extmark(extmark_parent_buf, ns, extmark_id)
+            db.del_annot(parent_buf_path, extmark_ln + 1)
+            print('Deleted successfully')
+            -- TODO: is this the right way of handling? Should only disable for the following command
+            vim.cmd('noautocmd')
+            vim.api.nvim_win_hide(annot_win)
+        else
+            print('Annotation NOT deleted')
+        end
+    end)
+end
+
 local function monitor_buf(extmark_parent_buf)
     local ns = vim.api.nvim_create_namespace('annotate')
     local is_monitored_buf = false
@@ -104,10 +134,12 @@ local function monitor_buf(extmark_parent_buf)
         end
     end
     if not is_monitored_buf then
+        local initial_line_ct = vim.api.nvim_buf_line_count(extmark_parent_buf)
         vim.api.nvim_buf_attach(extmark_parent_buf, false, {
-            on_lines = function(_, _, _, _, _)
+            on_lines = function(_, _, _, first_line, last_line)
                 local parent_buf_path = vim.api.nvim_buf_get_name(extmark_parent_buf)
                 vim.schedule(function()
+                    -- TODO: can I use nvim_buf_get_extmark_by_id() here instead to compare location?
                     local mod_extmarks = vim.api.nvim_buf_get_extmarks(extmark_parent_buf, ns, 0, -1, {})
                     for i, extmark1 in ipairs(curr_extmarks[extmark_parent_buf]) do
                         local id1 = extmark1[1]
@@ -122,11 +154,30 @@ local function monitor_buf(extmark_parent_buf)
                             end
                         end
                     end
+                    -- TODO: seems clunky but does this work properly?
+                    local latest_lines = vim.api.nvim_buf_line_count(extmark_parent_buf)
+                    for bufnr, lines in pairs(curr_extmark_bufs) do
+                        for _, extmark in ipairs(curr_extmarks[bufnr]) do
+                            if latest_lines < lines and (extmark[2] >= first_line and extmark[2] <= last_line) then
+                                print('A deletion happened in bufnr ', bufnr)
+                                print('First line is ', first_line)
+                                print('Last line is ', last_line)
+                                print('Affected extmark is:')
+                                print(vim.inspect(extmark))
+                                -- TODO: prompt for deletion of the extmark and the annotation
+                                prompt_delete(extmark_parent_buf, extmark[1], extmark[2])
+                            end
+                        end
+                    end
+                    curr_extmark_bufs[extmark_parent_buf] = latest_lines
+                    print('Line count: ', curr_extmark_bufs[extmark_parent_buf])
                 end)
             end
         })
-        table.insert(curr_extmark_bufs, extmark_parent_buf)
+        -- table.insert(curr_extmark_bufs, extmark_parent_buf)
+        curr_extmark_bufs[extmark_parent_buf] = initial_line_ct
         print('Monitoring bufnr ', extmark_parent_buf)
+        -- print('Init line count: ', curr_extmark_bufs[extmark_parent_buf])
     else
         print('Already monitoring bufnr ', extmark_parent_buf)
     end
@@ -176,22 +227,26 @@ function M.create_annotation()
     -- TODO: consider other/addtl events depending on how user might interact with the floating window
     -- other events to consider: WinClosed, WinLeave (BufLeave is executed before it)
     local au_group_edit = vim.api.nvim_create_augroup('AnnotateEdit', {clear=true})
-    -- local au_group_edit = vim.api.nvim_create_augroup('Annotate', {clear=true})
     vim.api.nvim_create_autocmd('BufHidden', {
         callback = function()
             local empty_lines = check_annot_buf_empty(annot_buf)
             local curr_mark
             if empty_lines then
                 -- TODO: instead of denying, ask whether annotation should be deleted instead
-                -- currently this just prints msg without updating annotation
+                -- currently this just prints msg without updating annotation!
                 curr_mark = mark_id
                 print('Annotation is empty')
             else
                 -- TODO: only do DB operations after checking that the annotation has actually changed
                 local buf_txt = vim.api.nvim_buf_get_lines(annot_buf, 0, -1, true)
-                if is_updt then -- extmark already exists but need to update the annotation
+                if is_updt then
                     db.updt_annot(parent_buf_path, cursor_ln, buf_txt)
                     curr_mark = mark_id
+                    vim.api.nvim_buf_set_extmark(extmark_parent_buf, ns, cursor_ln, 0, {
+                        id = curr_mark,
+                        sign_text = M.config.annot_sign,
+                        sign_hl_group = M.config.annot_sign_hl
+                    })
                     print('Modified annotation. is_updt: ', is_updt)
                 else
                     db.create_annot(parent_buf_path, cursor_ln, buf_txt)
@@ -199,15 +254,18 @@ function M.create_annotation()
                         sign_text = M.config.annot_sign,
                         sign_hl_group = M.config.annot_sign_hl
                     })
+                    -- TODO: seems a bit messy; are we using the funcs properly?
+                    local target = curr_extmarks[extmark_parent_buf]
+                    local curr_mark_pos = vim.api.nvim_buf_get_extmark_by_id(extmark_parent_buf, ns, curr_mark, {})
+                    if target then
+                        table.insert(target, {curr_mark, curr_mark_pos[1], curr_mark_pos[2]})
+                    else
+                        curr_extmarks[extmark_parent_buf] = { {curr_mark, curr_mark_pos[1], curr_mark_pos[2]}}
+                    end
                     print('Created new annotation. is_updt: ', is_updt)
+                    print('Bufnr ', extmark_parent_buf, ' sent for monitoring')
+                    monitor_buf(extmark_parent_buf)
                 end
-                vim.api.nvim_buf_set_extmark(extmark_parent_buf, ns, cursor_ln, 0, {
-                    id = curr_mark,
-                    sign_text = M.config.annot_sign,
-                    sign_hl_group = M.config.annot_sign_hl
-                })
-                print('Bufnr ', extmark_parent_buf, ' sent for monitoring')
-                monitor_buf(extmark_parent_buf)
             end
         end,
         group=au_group_edit,
@@ -235,7 +293,7 @@ function M.delete_annotation()
         vim.api.nvim_buf_set_extmark(extmark_parent_buf, ns, cursor_ln, 0, {
             id = mark_id,
             sign_text = M.config.annot_sign,
-            sign_hl_group = M.config.annot_sign_hl
+            sign_hl_group = M.config.annot_sign_hl_current
         })
 
         -- TODO: I *think* this is proper use of vim.schedule? intent: schedule prompt for after window shown
@@ -272,7 +330,6 @@ function M.setup(opts)
     -- considering BufNew, BufAdd, BufReadPre, BufReadPost
     -- TODO: change pattern to be more specific?
     local au_group_set = vim.api.nvim_create_augroup('AnnotateSet', {clear=true})
-    -- local au_group_set = vim.api.nvim_create_augroup('Annotate', {clear=true})
     vim.api.nvim_create_autocmd({'BufReadPost'}, {
         callback = function()
             set_annotations()
