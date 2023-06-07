@@ -10,7 +10,7 @@ local function create_annot_win(annot_buf, cursor_ln, extmark_parent_win, win_wi
         anchor = 'NE',
         row = cursor_ln - 1,
         col = win_width - padding,
-        width = 25,
+        width = M.config.annot_win_width,
         height = 10,
         border = 'rounded',
         style = 'minimal',
@@ -25,7 +25,7 @@ local function create_annot_buf(cursor_ln)
     local annot_buf = vim.fn.bufnr(annot_buf_name)
     local extmark_parent_win = vim.api.nvim_get_current_win()
     local win_width = vim.api.nvim_win_get_width(extmark_parent_win)
-    local padding = 2
+    local padding = M.config.annot_win_padding
     local annot_win
     if annot_buf == -1 then
         annot_buf = vim.api.nvim_create_buf(false, true)
@@ -124,7 +124,6 @@ local function prompt_delete(extmark_parent_buf, extmark_id, extmark_ln)
     end)
 end
 
--- TODO: we seem to monitor bufs already monitoring
 -- TODO: also check if monitoring bufs without extmarks and nothing created YET
 local function monitor_buf(extmark_parent_buf)
     local ns = vim.api.nvim_create_namespace('annotate')
@@ -135,6 +134,7 @@ local function monitor_buf(extmark_parent_buf)
             break
         end
     end
+    -- TODO: we seem to monitor bufs already monitoring
     if not is_monitored_buf then
         local initial_line_ct = vim.api.nvim_buf_line_count(extmark_parent_buf)
         vim.api.nvim_buf_attach(extmark_parent_buf, false, {
@@ -281,8 +281,6 @@ function M.create_annotation()
     })
 end
 
--- TODO: this isn't reliably deleting the extmarks; looks like it deletes but then immediately
--- recreates it --> autocmd getting triggered?
 function M.delete_annotation()
     local extmark_parent_win = vim.api.nvim_get_current_win()
     local extmark_parent_buf = vim.api.nvim_win_get_buf(extmark_parent_win)
@@ -321,12 +319,13 @@ function M.delete_annotation()
                         break
                     end
                 end
-                print('Deleted successfully')
-                -- TODO: is this the right way of handling? Should only disable for the following command
+                print('Deleted successfully. Will hide window ' .. annot_win)
+                -- TODO: this seems clunky but it works?
                 -- vim.cmd('noautocmd')
                 -- doesn't work if create_annotation hasn't been called yet
-                vim.api.nvim_del_augroup_by_name('AnnotateEdit')
-                vim.api.nvim_win_hide(annot_win)
+                -- vim.api.nvim_del_augroup_by_name('AnnotateEdit')
+                -- vim.api.nvim_win_hide(annot_win)
+                vim.cmd('noautocmd lua vim.api.nvim_win_hide(' .. annot_win .. ')')
             else
                 print('Annotation NOT deleted')
             end
@@ -334,13 +333,14 @@ function M.delete_annotation()
     end
 end
 
--- TODO: is there a better way to specify/config hl? or how do we set a sensible default at least
+-- TODO: is there a better way to specify/config hl? or did we set a sensible default at least
 -- TODO: use webdevicons for symbol instead?
--- TODO: allow window config here?
 local default_opts = {
     annot_sign = '󰍕',
     annot_sign_hl = 'Comment',
-    annot_sign_hl_current = 'FloatBorder'
+    annot_sign_hl_current = 'FloatBorder',
+    annot_win_width = 25,
+    annot_win_padding = 2
 }
 
 function M.setup(opts)
