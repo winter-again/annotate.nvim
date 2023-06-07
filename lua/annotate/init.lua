@@ -124,6 +124,8 @@ local function prompt_delete(extmark_parent_buf, extmark_id, extmark_ln)
     end)
 end
 
+-- TODO: we seem to monitor bufs already monitoring
+-- TODO: also check if monitoring bufs without extmarks and nothing created YET
 local function monitor_buf(extmark_parent_buf)
     local ns = vim.api.nvim_create_namespace('annotate')
     local is_monitored_buf = false
@@ -154,7 +156,7 @@ local function monitor_buf(extmark_parent_buf)
                             end
                         end
                     end
-                    -- TODO: seems clunky but does this work properly?
+                    -- TODO: can treesitter be used to more easily detect deletion instead?
                     local latest_lines = vim.api.nvim_buf_line_count(extmark_parent_buf)
                     for bufnr, lines in pairs(curr_extmark_bufs) do
                         for _, extmark in ipairs(curr_extmarks[bufnr]) do
@@ -165,7 +167,13 @@ local function monitor_buf(extmark_parent_buf)
                                 print('Affected extmark is:')
                                 print(vim.inspect(extmark))
                                 -- TODO: prompt for deletion of the extmark and the annotation
-                                prompt_delete(extmark_parent_buf, extmark[1], extmark[2])
+                                -- currently not working likely because the prompt_delete function itself
+                                -- involves schedule, which is probably pushing back that floating window
+                                -- render back?
+                                -- prompt_delete(extmark_parent_buf, extmark[1], extmark[2])
+                                vim.api.nvim_buf_del_extmark(extmark_parent_buf, ns, extmark[1])
+                                db.del_annot(parent_buf_path, extmark[2])
+                                print('Deleted extmark + annotation from DB')
                             end
                         end
                     end
@@ -273,6 +281,8 @@ function M.create_annotation()
     })
 end
 
+-- TODO: this isn't reliably deleting the extmarks; looks like it deletes but then immediately
+-- recreates it --> autocmd getting triggered?
 function M.delete_annotation()
     local extmark_parent_win = vim.api.nvim_get_current_win()
     local extmark_parent_buf = vim.api.nvim_win_get_buf(extmark_parent_win)
@@ -303,9 +313,19 @@ function M.delete_annotation()
                 -- local mark_id = existing_extmark[1][1]
                 vim.api.nvim_buf_del_extmark(extmark_parent_buf, ns, mark_id)
                 db.del_annot(parent_buf_path, cursor_ln)
+                -- TODO: for updating curr_extmarks; clean this up
+                local target = curr_extmarks[extmark_parent_buf]
+                for i, extmark in ipairs(target) do
+                    if mark_id == extmark[1] then
+                        table.remove(target, i)
+                        break
+                    end
+                end
                 print('Deleted successfully')
                 -- TODO: is this the right way of handling? Should only disable for the following command
-                vim.cmd('noautocmd')
+                -- vim.cmd('noautocmd')
+                -- doesn't work if create_annotation hasn't been called yet
+                vim.api.nvim_del_augroup_by_name('AnnotateEdit')
                 vim.api.nvim_win_hide(annot_win)
             else
                 print('Annotation NOT deleted')
