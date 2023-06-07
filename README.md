@@ -4,6 +4,8 @@
 
 A plugin for creating and storing notes (annotations) related to a line of code/text. It uses Neovim's extended marks and a [SQLite database](https://github.com/kkharji/sqlite.lua) to store annotation information.
 
+https://github.com/winter-again/annotate.nvim/assets/63322884/248a3410-bc51-46b4-a298-f19ba4c4c449
+
 ## Installation & configuration
 
 With [folke/lazy.nvim](https://github.com/folke/lazy.nvim)
