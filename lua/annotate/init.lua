@@ -111,6 +111,8 @@ local function monitor_buf(extmark_parent_buf)
                 local parent_buf_path = vim.api.nvim_buf_get_name(bufnr)
                 vim.schedule(function()
                     -- TODO: figure out if there's a better way of handling/prompting for deletions
+                    -- or should we actually treat like below where certain types of modifications
+                    -- will just not carry extmarks with them?
                     local curr_line_ct = curr_extmark_bufs[bufnr]
                     local new_line_ct = vim.api.nvim_buf_line_count(bufnr)
                     for i, extmark in ipairs(curr_extmarks[bufnr]) do
@@ -141,7 +143,6 @@ local function monitor_buf(extmark_parent_buf)
     end
 end
 
--- TODO: do we want to trigger all of this when no annotations exist for buf?
 local function set_annotations()
     local cwd = '^' .. vim.fn.getcwd()
     local buf_info = vim.fn.getbufinfo()
@@ -164,8 +165,8 @@ function M.create_annotation()
     local mark_id
     local annot_buf
     local is_updt
-
     annot_buf, _ = create_annot_buf(cursor_ln)
+
     if next(existing_extmark) == nil then
         is_updt = false
     else
@@ -181,48 +182,42 @@ function M.create_annotation()
         is_updt = true
     end
 
-    -- handle for when user is done interacting with the annotation floating window
     -- TODO: consider other/addtl events depending on how user might interact with the floating window
     -- other events to consider: WinClosed, WinLeave (BufLeave is executed before it)
     local au_group_edit = vim.api.nvim_create_augroup('AnnotateEdit', {clear=true})
     vim.api.nvim_create_autocmd('BufHidden', {
         callback = function()
             local empty_lines = check_annot_buf_empty(annot_buf)
-            local curr_mark
             if empty_lines then
-                -- TODO: instead of denying, ask whether annotation should be deleted instead
-                -- currently this just prints msg without updating annotation!
-                curr_mark = mark_id
+                -- TODO: if new annotation, nothing happens; if existing, it isn't updated
+                -- should we offer some option here for deleting it?
+                vim.api.nvim_buf_set_extmark(extmark_parent_buf, ns, cursor_ln, 0, {
+                    id = mark_id,
+                    sign_text = M.config.annot_sign,
+                    sign_hl_group = M.config.annot_sign_hl
+                })
                 print('Annotation is empty')
             else
-                -- TODO: only do DB operations after checking that the annotation has actually changed
+                -- TODO: only do DB operations after checking that the annotation has actually changed?
+                -- prob no utility because we'd be reading from the DB anyway to do the comparison
                 local buf_txt = vim.api.nvim_buf_get_lines(annot_buf, 0, -1, true)
                 if is_updt then
                     db.updt_annot(parent_buf_path, cursor_ln, buf_txt)
-                    curr_mark = mark_id
+                    -- curr_mark = mark_id
                     vim.api.nvim_buf_set_extmark(extmark_parent_buf, ns, cursor_ln, 0, {
-                        id = curr_mark,
+                        id = mark_id,
                         sign_text = M.config.annot_sign,
                         sign_hl_group = M.config.annot_sign_hl
                     })
-                    print('Modified annotation. is_updt: ', is_updt)
+                    -- print('Modified annotation. is_updt: ', is_updt)
                 else
                     db.create_annot(parent_buf_path, cursor_ln, buf_txt)
-                    curr_mark = vim.api.nvim_buf_set_extmark(extmark_parent_buf, ns, cursor_ln, 0, {
+                    local new_mark_id = vim.api.nvim_buf_set_extmark(extmark_parent_buf, ns, cursor_ln, 0, {
                         sign_text = M.config.annot_sign,
                         sign_hl_group = M.config.annot_sign_hl
                     })
-                    -- TODO: seems a bit messy; are we using the funcs properly?
-                    local target = curr_extmarks[extmark_parent_buf]
-                    local curr_mark_pos = vim.api.nvim_buf_get_extmark_by_id(extmark_parent_buf, ns, curr_mark, {})
-                    if target then
-                        table.insert(target, {curr_mark, curr_mark_pos[1], curr_mark_pos[2]})
-                    else
-                        curr_extmarks[extmark_parent_buf] = { {curr_mark, curr_mark_pos[1], curr_mark_pos[2]}}
-                    end
-                    print('Created new annotation. is_updt: ', is_updt)
-                    print('Bufnr ', extmark_parent_buf, ' sent for monitoring')
-                    monitor_buf(extmark_parent_buf)
+                    local new_extmark = vim.api.nvim_buf_get_extmarks(extmark_parent_buf, ns, new_mark_id, new_mark_id, {})[1]
+                    table.insert(curr_extmarks[extmark_parent_buf], new_extmark)
                 end
             end
         end,
@@ -271,10 +266,6 @@ function M.delete_annotation()
                 end
                 print('Deleted successfully. Will hide window ' .. annot_win)
                 -- TODO: this seems clunky but it works?
-                -- vim.cmd('noautocmd')
-                -- doesn't work if create_annotation hasn't been called yet
-                -- vim.api.nvim_del_augroup_by_name('AnnotateEdit')
-                -- vim.api.nvim_win_hide(annot_win)
                 vim.cmd('noautocmd lua vim.api.nvim_win_hide(' .. annot_win .. ')')
             else
                 print('Annotation NOT deleted')
