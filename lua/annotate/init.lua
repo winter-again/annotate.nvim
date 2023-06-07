@@ -104,7 +104,7 @@ local function monitor_buf(extmark_parent_buf)
     if not is_monitored_buf then
         local initial_line_ct = vim.api.nvim_buf_line_count(extmark_parent_buf)
         curr_extmark_bufs[extmark_parent_buf] = initial_line_ct
-        print('Monitoring bufnr ', extmark_parent_buf, is_monitored_buf)
+        -- print('Monitoring bufnr ', extmark_parent_buf, is_monitored_buf)
 
         vim.api.nvim_buf_attach(extmark_parent_buf, false, {
             on_lines = function(_, bufnr, _, first_line, last_line)
@@ -138,8 +138,8 @@ local function monitor_buf(extmark_parent_buf)
                 end)
             end
         })
-    else
-        print('Already monitoring bufnr ', extmark_parent_buf, is_monitored_buf)
+    -- else
+        -- print('Already monitoring bufnr ', extmark_parent_buf, is_monitored_buf)
     end
 end
 

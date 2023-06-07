@@ -1,7 +1,7 @@
 local sqlite = require('sqlite.db')
 local tbl = require('sqlite.tbl')
--- TODO: should we put this in a folder? or at least structure by project?
-local uri = vim.fn.stdpath('data') .. '/annotations_db' -- '/home/andrew/.local/shrae/nvim/annotations_db'
+-- TODO: should we put this in a folder?
+local uri = vim.fn.stdpath('data') .. '/annotations_db'
 local M = {}
 
 local annots_tbl = tbl('annots_tbl', {
@@ -54,7 +54,6 @@ function M.create_annot(parent_buf_path, extmark_ln, annot)
         extmark_ln = extmark_ln,
         text = annot_concat
     })
-    -- print('Created DB entry')
 end
 
 function M.updt_annot(parent_buf_path, extmark_ln, annot)
@@ -70,7 +69,6 @@ function M.updt_annot(parent_buf_path, extmark_ln, annot)
     })
 end
 
--- TODO: ok to set on something in where?
 function M.updt_annot_pos(parent_buf_path, old_extmark_ln, new_extmark_ln)
     annots_tbl:update({
         set = {
