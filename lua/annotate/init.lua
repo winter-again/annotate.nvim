@@ -92,37 +92,6 @@ end
 local curr_extmarks = {}
 local curr_extmark_bufs = {}
 
--- TODO: clean up and consider make it useable from M.delete_annotation() or if there's
--- a better way to do it
-local function prompt_delete(extmark_parent_buf, extmark_id, extmark_ln)
-    local ns = vim.api.nvim_create_namespace('annotate')
-    local parent_buf_path = vim.api.nvim_buf_get_name(extmark_parent_buf)
-    local annot_txt = db.get_annot(parent_buf_path, extmark_ln)[1]['text']
-    local annot_lines = build_annot(annot_txt)
-    local annot_buf, annot_win = create_annot_buf(extmark_ln + 1)
-    vim.api.nvim_buf_set_lines(annot_buf, 0, -1, false, annot_lines)
-    vim.api.nvim_buf_set_extmark(extmark_parent_buf, ns, extmark_ln + 1, 0, {
-        id = extmark_id,
-        sign_text = M.config.annot_sign,
-        sign_hl_group = M.config.annot_sign_hl_current
-    })
-    -- TODO: I *think* this is proper use of vim.schedule? intent: schedule prompt for after window shown
-    vim.schedule(function()
-        local confirm = vim.fn.input('Are you sure you want to delete this annotation? (y/n): ')
-        if confirm:lower() == 'y' then
-            -- local mark_id = existing_extmark[1][1]
-            vim.api.nvim_buf_del_extmark(extmark_parent_buf, ns, extmark_id)
-            db.del_annot(parent_buf_path, extmark_ln + 1)
-            print('Deleted successfully')
-            -- TODO: this is wrong below
-            vim.cmd('noautocmd')
-            vim.api.nvim_win_hide(annot_win)
-        else
-            print('Annotation NOT deleted')
-        end
-    end)
-end
-
 local function monitor_buf(extmark_parent_buf)
     local ns = vim.api.nvim_create_namespace('annotate')
     local is_monitored_buf = false
@@ -141,6 +110,19 @@ local function monitor_buf(extmark_parent_buf)
             on_lines = function(_, bufnr, _, first_line, last_line)
                 local parent_buf_path = vim.api.nvim_buf_get_name(bufnr)
                 vim.schedule(function()
+                    -- TODO: figure out if there's a better way of handling/prompting for deletions
+                    local curr_line_ct = curr_extmark_bufs[bufnr]
+                    local new_line_ct = vim.api.nvim_buf_line_count(bufnr)
+                    for i, extmark in ipairs(curr_extmarks[bufnr]) do
+                        if new_line_ct < curr_line_ct and (extmark[2] >= first_line and extmark[2] <= last_line) then
+                            vim.api.nvim_buf_del_extmark(bufnr, ns, extmark[1])
+                            db.del_annot(parent_buf_path, extmark[2])
+                            table.remove(curr_extmarks[bufnr], i)
+                            print('Deleted annotation(s)')
+                        end
+                    end
+                    -- note: this only handles for position changes from typing and lines shift
+                    -- if you move the line manually, then by nature of extmarks, they will not come along
                     for i, curr_extmark in ipairs(curr_extmarks[bufnr]) do
                         local id = curr_extmark[1]
                         local curr_ln = curr_extmark[2]
@@ -151,46 +133,6 @@ local function monitor_buf(extmark_parent_buf)
                             db.updt_annot_pos(parent_buf_path, curr_ln, new_extmark_ln)
                         end
                     end
-                    -- TODO: should we be iterating through each buf? Isn't this attached to specific buf already
-                    -- local curr_line_ct = curr_extmark_bufs[bufnr]
-                    -- local new_line_ct = vim.api.nvim_buf_line_count(bufnr)
-                    -- for i, extmark in ipairs(curr_extmarks[bufnr]) do
-                    --     if new_line_ct < curr_line_ct and (extmark[2] >= first_line and extmark[2] <= last_line) then
-                    --         print('A deletion occurred in bufnr ', bufnr)
-                    --         print('First line: ', first_line)
-                    --         print('Last line: ', last_line)
-                    --         print('Affected extmark is ')
-                    --         print(vim.inpsect(extmark))
-                    --         vim.api.nvim_buf_del_extmark(bufnr, ns, extmark[1])
-                    --         db.del_annot(parent_buf_path, extmark[2])
-                    --         table.remove(curr_extmarks[bufnr], i)
-                    --         print('Deleted extmark + annotation from DB and curr_extmarks')
-                    --     end
-                    -- end
-
-                    -- local latest_lines = vim.api.nvim_buf_line_count(bufnr)
-                    -- for bufnr, lines in pairs(curr_extmark_bufs) do
-                    --     for i, extmark in ipairs(curr_extmarks[bufnr]) do
-                    --         if latest_lines < lines and (extmark[2] >= first_line and extmark[2] <= last_line) then
-                    --             print('A deletion happened in bufnr ', bufnr)
-                    --             print('First line is ', first_line)
-                    --             print('Last line is ', last_line)
-                    --             print('Affected extmark is:')
-                    --             print(vim.inspect(extmark))
-                    --             -- TODO: prompt for deletion of the extmark and the annotation
-                    --             -- currently not working likely because the prompt_delete function itself
-                    --             -- involves schedule, which is probably pushing back that floating window
-                    --             -- render?
-                    --             -- prompt_delete(extmark_parent_buf, extmark[1], extmark[2])
-                    --             vim.api.nvim_buf_del_extmark(extmark_parent_buf, ns, extmark[1])
-                    --             db.del_annot(parent_buf_path, extmark[2])
-                    --             table.remove(curr_extmarks[bufnr], i)
-                    --             print('Deleted extmark + annotation from DB and curr_extmarks')
-                    --         end
-                    --     end
-                    -- end
-                    -- curr_extmark_bufs[extmark_parent_buf] = latest_lines
-                    -- print('Line count: ', curr_extmark_bufs[extmark_parent_buf])
                 end)
             end
         })
