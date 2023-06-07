@@ -159,10 +159,9 @@ local function monitor_buf(extmark_parent_buf)
                             end
                         end
                     end
-                    -- TODO: can treesitter be used to more easily detect deletion instead?
                     local latest_lines = vim.api.nvim_buf_line_count(extmark_parent_buf)
                     for bufnr, lines in pairs(curr_extmark_bufs) do
-                        for _, extmark in ipairs(curr_extmarks[bufnr]) do
+                        for i, extmark in ipairs(curr_extmarks[bufnr]) do
                             if latest_lines < lines and (extmark[2] >= first_line and extmark[2] <= last_line) then
                                 print('A deletion happened in bufnr ', bufnr)
                                 print('First line is ', first_line)
@@ -172,11 +171,12 @@ local function monitor_buf(extmark_parent_buf)
                                 -- TODO: prompt for deletion of the extmark and the annotation
                                 -- currently not working likely because the prompt_delete function itself
                                 -- involves schedule, which is probably pushing back that floating window
-                                -- render back?
+                                -- render?
                                 -- prompt_delete(extmark_parent_buf, extmark[1], extmark[2])
                                 vim.api.nvim_buf_del_extmark(extmark_parent_buf, ns, extmark[1])
                                 db.del_annot(parent_buf_path, extmark[2])
-                                print('Deleted extmark + annotation from DB')
+                                table.remove(curr_extmarks[bufnr], i)
+                                print('Deleted extmark + annotation from DB and curr_extmarks')
                             end
                         end
                     end
