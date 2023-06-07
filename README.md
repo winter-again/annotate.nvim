@@ -13,6 +13,7 @@ With [folke/lazy.nvim](https://github.com/folke/lazy.nvim)
 ```lua
 {
   'winter-again/annotate.nvim',
+  dependencies = {'kkharji/sqlite.lua'},
   config = function()
     require('annotate').setup({
       -- sign column symbol to use
