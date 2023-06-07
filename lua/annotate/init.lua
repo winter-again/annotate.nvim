@@ -264,7 +264,7 @@ function M.delete_annotation()
                         break
                     end
                 end
-                print('Deleted successfully. Will hide window ' .. annot_win)
+                -- print('Deleted successfully. Will hide window ' .. annot_win)
                 -- TODO: this seems clunky but it works?
                 vim.cmd('noautocmd lua vim.api.nvim_win_hide(' .. annot_win .. ')')
             else
