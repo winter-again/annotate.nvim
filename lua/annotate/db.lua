@@ -4,7 +4,6 @@ local tbl = require('sqlite.tbl')
 local uri = vim.fn.stdpath('data') .. '/annotations_db' -- '/home/andrew/.local/shrae/nvim/annotations_db'
 local M = {}
 
--- TODO: figure out how to specify the kind of uniqueness we want
 local annots_tbl = tbl('annots_tbl', {
     id = true, -- same as {type='integer', required=true, primary=true}
     buf_full_path = {'text', required=true},
