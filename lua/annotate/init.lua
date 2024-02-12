@@ -315,32 +315,31 @@ function M.setup(opts)
     })
 end
 
--- TODO: delete these helper funcs
-function M.list_annotations()
-    local namespace = vim.api.nvim_create_namespace('annotate')
-    local marks = vim.api.nvim_buf_get_extmarks(0, namespace, 0, -1, {})
-    P(marks)
-end
-
-function M.check_line()
-    local extmark_parent_win = vim.api.nvim_get_current_win()
-    local extmark_parent_buf = vim.api.nvim_win_get_buf(extmark_parent_win)
-    local cursor_ln = vim.api.nvim_win_get_cursor(extmark_parent_win)[1] - 1
-    local ns = vim.api.nvim_create_namespace('annotate')
-    local existing_extmark = vim.api.nvim_buf_get_extmarks(
-        extmark_parent_buf,
-        ns,
-        { cursor_ln, 0 },
-        { cursor_ln, 0 },
-        {}
-    )
-    P(existing_extmark)
-    print('Cursor @ ', cursor_ln + 1)
-end
-
-function M.show_extmarks()
-    print('extmarks ', vim.inspect(curr_extmarks))
-    print('extmark bufs ', vim.inspect(curr_extmark_bufs))
-end
+-- function M.list_annotations()
+--     local namespace = vim.api.nvim_create_namespace('annotate')
+--     local marks = vim.api.nvim_buf_get_extmarks(0, namespace, 0, -1, {})
+--     P(marks)
+-- end
+--
+-- function M.check_line()
+--     local extmark_parent_win = vim.api.nvim_get_current_win()
+--     local extmark_parent_buf = vim.api.nvim_win_get_buf(extmark_parent_win)
+--     local cursor_ln = vim.api.nvim_win_get_cursor(extmark_parent_win)[1] - 1
+--     local ns = vim.api.nvim_create_namespace('annotate')
+--     local existing_extmark = vim.api.nvim_buf_get_extmarks(
+--         extmark_parent_buf,
+--         ns,
+--         { cursor_ln, 0 },
+--         { cursor_ln, 0 },
+--         {}
+--     )
+--     P(existing_extmark)
+--     print('Cursor @ ', cursor_ln + 1)
+-- end
+--
+-- function M.show_extmarks()
+--     print('extmarks ', vim.inspect(curr_extmarks))
+--     print('extmark bufs ', vim.inspect(curr_extmark_bufs))
+-- end
 
 return M
