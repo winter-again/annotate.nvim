@@ -15,7 +15,7 @@ local function create_annot_win(annot_buf, cursor_ln, extmark_parent_win, win_wi
         border = 'rounded',
         style = 'minimal',
         title = 'Annotation',
-        title_pos = 'center'
+        title_pos = 'center',
     })
     return annot_win
 end
@@ -30,12 +30,12 @@ local function create_annot_buf(cursor_ln)
     if annot_buf == -1 then
         annot_buf = vim.api.nvim_create_buf(false, true)
         vim.api.nvim_buf_set_name(annot_buf, annot_buf_name)
-        vim.api.nvim_buf_set_keymap(annot_buf, 'n', 'q', ':close<CR>', {noremap=true, silent=true, nowait=true})
+        vim.api.nvim_buf_set_keymap(annot_buf, 'n', 'q', ':close<CR>', { noremap = true, silent = true, nowait = true })
         annot_win = create_annot_win(annot_buf, cursor_ln, extmark_parent_win, win_width, padding)
         -- print('Existing buffer + window don\'t exist: ', annot_buf, annot_win)
     else
         vim.api.nvim_buf_set_lines(annot_buf, 0, -1, true, {})
-        vim.api.nvim_buf_set_keymap(annot_buf, 'n', 'q', ':close<CR>', {noremap=true, silent=true, nowait=true})
+        vim.api.nvim_buf_set_keymap(annot_buf, 'n', 'q', ':close<CR>', { noremap = true, silent = true, nowait = true })
         annot_win = create_annot_win(annot_buf, cursor_ln, extmark_parent_win, win_width, padding)
         -- print('Fetched existing buffer + window: ', annot_buf, annot_win)
     end
@@ -76,7 +76,7 @@ local function set_buf_annotations(extmark_parent_buf)
             for _, row in ipairs(extmark_tbl) do
                 vim.api.nvim_buf_set_extmark(extmark_parent_buf, ns, row.extmark_ln, 0, {
                     sign_text = M.config.annot_sign,
-                    sign_hl_group = M.config.annot_sign_hl
+                    sign_hl_group = M.config.annot_sign_hl,
                 })
             end
             existing_extmarks = vim.api.nvim_buf_get_extmarks(extmark_parent_buf, ns, 0, -1, {})
@@ -136,19 +136,20 @@ local function monitor_buf(extmark_parent_buf)
                         end
                     end
                 end)
-            end
+            end,
         })
-    -- else
+        -- else
         -- print('Already monitoring bufnr ', extmark_parent_buf, is_monitored_buf)
     end
 end
 
 local function set_annotations()
-    local cwd = '^' .. vim.fn.getcwd()
+    -- local cwd = '^' .. vim.fn.getcwd()
     local buf_info = vim.fn.getbufinfo()
     for _, buf in ipairs(buf_info) do
-        -- TODO: are these conditions the best to check?
-        if string.match(buf.name, cwd) and vim.fn.bufexists(buf.bufnr) and buf.listed == 1 then
+        -- NOTE: removing this cwd check
+        -- if string.match(buf.name, cwd) and vim.fn.bufexists(buf.bufnr) and buf.listed == 1 then
+        if vim.fn.bufexists(buf.bufnr) and buf.listed == 1 then
             curr_extmarks[buf.bufnr] = set_buf_annotations(buf.bufnr)
             monitor_buf(buf.bufnr)
         end
@@ -161,7 +162,13 @@ function M.create_annotation()
     local parent_buf_path = vim.api.nvim_buf_get_name(extmark_parent_buf)
     local cursor_ln = vim.api.nvim_win_get_cursor(extmark_parent_win)[1] - 1
     local ns = vim.api.nvim_create_namespace('annotate')
-    local existing_extmark = vim.api.nvim_buf_get_extmarks(extmark_parent_buf, ns, {cursor_ln, 0}, {cursor_ln, 0}, {})
+    local existing_extmark = vim.api.nvim_buf_get_extmarks(
+        extmark_parent_buf,
+        ns,
+        { cursor_ln, 0 },
+        { cursor_ln, 0 },
+        {}
+    )
     local mark_id
     local annot_buf
     local is_updt
@@ -177,14 +184,14 @@ function M.create_annotation()
         vim.api.nvim_buf_set_extmark(extmark_parent_buf, ns, cursor_ln, 0, {
             id = mark_id,
             sign_text = M.config.annot_sign,
-            sign_hl_group = M.config.annot_sign_hl_current
+            sign_hl_group = M.config.annot_sign_hl_current,
         })
         is_updt = true
     end
 
     -- TODO: consider other/addtl events depending on how user might interact with the floating window
     -- other events to consider: WinClosed, WinLeave (BufLeave is executed before it)
-    local au_group_edit = vim.api.nvim_create_augroup('AnnotateEdit', {clear=true})
+    local au_group_edit = vim.api.nvim_create_augroup('AnnotateEdit', { clear = true })
     vim.api.nvim_create_autocmd('BufHidden', {
         callback = function()
             local empty_lines = check_annot_buf_empty(annot_buf)
@@ -194,7 +201,7 @@ function M.create_annotation()
                 vim.api.nvim_buf_set_extmark(extmark_parent_buf, ns, cursor_ln, 0, {
                     id = mark_id,
                     sign_text = M.config.annot_sign,
-                    sign_hl_group = M.config.annot_sign_hl
+                    sign_hl_group = M.config.annot_sign_hl,
                 })
                 print('Annotation is empty')
             else
@@ -207,22 +214,24 @@ function M.create_annotation()
                     vim.api.nvim_buf_set_extmark(extmark_parent_buf, ns, cursor_ln, 0, {
                         id = mark_id,
                         sign_text = M.config.annot_sign,
-                        sign_hl_group = M.config.annot_sign_hl
+                        sign_hl_group = M.config.annot_sign_hl,
                     })
-                    -- print('Modified annotation. is_updt: ', is_updt)
+                    print('Modified annotation. is_updt: ', is_updt)
                 else
                     db.create_annot(parent_buf_path, cursor_ln, buf_txt)
                     local new_mark_id = vim.api.nvim_buf_set_extmark(extmark_parent_buf, ns, cursor_ln, 0, {
                         sign_text = M.config.annot_sign,
-                        sign_hl_group = M.config.annot_sign_hl
+                        sign_hl_group = M.config.annot_sign_hl,
                     })
-                    local new_extmark = vim.api.nvim_buf_get_extmarks(extmark_parent_buf, ns, new_mark_id, new_mark_id, {})[1]
-                    table.insert(curr_extmarks[extmark_parent_buf], new_extmark)
+                    local new_extmark =
+                        vim.api.nvim_buf_get_extmarks(extmark_parent_buf, ns, new_mark_id, new_mark_id, {})[1]
+                    -- table.insert(curr_extmarks[extmark_parent_buf], new_extmark)
+                    curr_extmarks[extmark_parent_buf] = new_extmark
                 end
             end
         end,
-        group=au_group_edit,
-        buffer=annot_buf
+        group = au_group_edit,
+        buffer = annot_buf,
     })
 end
 
@@ -232,7 +241,13 @@ function M.delete_annotation()
     local parent_buf_path = vim.api.nvim_buf_get_name(extmark_parent_buf)
     local cursor_ln = vim.api.nvim_win_get_cursor(extmark_parent_win)[1] - 1
     local ns = vim.api.nvim_create_namespace('annotate')
-    local existing_extmark = vim.api.nvim_buf_get_extmarks(extmark_parent_buf, ns, {cursor_ln, 0}, {cursor_ln, 0}, {})
+    local existing_extmark = vim.api.nvim_buf_get_extmarks(
+        extmark_parent_buf,
+        ns,
+        { cursor_ln, 0 },
+        { cursor_ln, 0 },
+        {}
+    )
     local mark_id
 
     if next(existing_extmark) == nil then
@@ -246,7 +261,7 @@ function M.delete_annotation()
         vim.api.nvim_buf_set_extmark(extmark_parent_buf, ns, cursor_ln, 0, {
             id = mark_id,
             sign_text = M.config.annot_sign,
-            sign_hl_group = M.config.annot_sign_hl_current
+            sign_hl_group = M.config.annot_sign_hl_current,
         })
 
         -- TODO: I *think* this is proper use of vim.schedule? intent: schedule prompt for after window shown
@@ -281,7 +296,7 @@ local default_opts = {
     annot_sign_hl = 'Comment',
     annot_sign_hl_current = 'FloatBorder',
     annot_win_width = 25,
-    annot_win_padding = 2
+    annot_win_padding = 2,
 }
 
 function M.setup(opts)
@@ -290,13 +305,13 @@ function M.setup(opts)
     -- might start setting annotations? or already handled enough by the create_annotation func?
     -- considering BufNew, BufAdd, BufReadPre, BufReadPost
     -- TODO: change pattern to be more specific?
-    local au_group_set = vim.api.nvim_create_augroup('AnnotateSet', {clear=true})
-    vim.api.nvim_create_autocmd({'BufReadPost'}, {
+    local au_group_set = vim.api.nvim_create_augroup('AnnotateSet', { clear = true })
+    vim.api.nvim_create_autocmd({ 'BufReadPost' }, {
         callback = function()
             set_annotations()
         end,
         group = au_group_set,
-        pattern = '*'
+        pattern = '*',
     })
 end
 
@@ -312,7 +327,13 @@ function M.check_line()
     local extmark_parent_buf = vim.api.nvim_win_get_buf(extmark_parent_win)
     local cursor_ln = vim.api.nvim_win_get_cursor(extmark_parent_win)[1] - 1
     local ns = vim.api.nvim_create_namespace('annotate')
-    local existing_extmark = vim.api.nvim_buf_get_extmarks(extmark_parent_buf, ns, {cursor_ln, 0}, {cursor_ln, 0}, {})
+    local existing_extmark = vim.api.nvim_buf_get_extmarks(
+        extmark_parent_buf,
+        ns,
+        { cursor_ln, 0 },
+        { cursor_ln, 0 },
+        {}
+    )
     P(existing_extmark)
     print('Cursor @ ', cursor_ln + 1)
 end
