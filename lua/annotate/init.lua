@@ -1,3 +1,4 @@
+local sqlite = require('sqlite.db')
 local db = require('annotate.db')
 local M = {}
 
@@ -292,6 +293,7 @@ end
 -- TODO: is there a better way to specify/config hl? or did we set a sensible default at least
 -- TODO: use webdevicons for symbol instead?
 local default_opts = {
+    db_uri = vim.fn.stdpath('data') .. '/annotations_db',
     annot_sign = '󰍕',
     annot_sign_hl = 'Comment',
     annot_sign_hl_current = 'FloatBorder',
@@ -301,6 +303,12 @@ local default_opts = {
 
 function M.setup(opts)
     M.config = vim.tbl_deep_extend('force', default_opts, opts or {})
+
+    local db_obj = sqlite({
+        uri = M.config.db_uri,
+        annots_tbl = db.annots_tbl,
+        opts = {},
+    })
     -- TODO: need to add another event(s) to track when user opens a new buffer that they
     -- might start setting annotations? or already handled enough by the create_annotation func?
     -- considering BufNew, BufAdd, BufReadPre, BufReadPost

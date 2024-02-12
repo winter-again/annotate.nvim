@@ -16,6 +16,8 @@ With [folke/lazy.nvim](https://github.com/folke/lazy.nvim)
   dependencies = {'kkharji/sqlite.lua'},
   config = function()
     require('annotate').setup({
+      -- path for the sqlite db file
+      db_uri = vim.fn.stdpath('data') .. '/annotations_db',
       -- sign column symbol to use
       annot_sign = '󰍕',
       -- highlight group for symbol

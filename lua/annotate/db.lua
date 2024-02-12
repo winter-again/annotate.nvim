@@ -1,20 +1,11 @@
-local sqlite = require('sqlite.db')
 local tbl = require('sqlite.tbl')
--- TODO: should we put this in a folder?
-local uri = vim.fn.stdpath('data') .. '/annotations_db'
 local M = {}
 
-local annots_tbl = tbl('annots_tbl', {
+M.annots_tbl = tbl('annots_tbl', {
     id = true, -- same as {type='integer', required=true, primary=true}
     buf_full_path = { 'text', required = true },
     extmark_ln = { 'number', required = true },
     text = { 'text', required = true },
-})
-
-local db = sqlite({
-    uri = uri,
-    annots_tbl = annots_tbl,
-    opts = {},
 })
 
 -- function M.show_db()
@@ -22,7 +13,7 @@ local db = sqlite({
 -- end
 
 function M.get_annot(parent_buf_path, extmark_ln)
-    local annot_txt = annots_tbl:get({
+    local annot_txt = M.annots_tbl:get({
         select = {
             'text',
         },
@@ -35,7 +26,7 @@ function M.get_annot(parent_buf_path, extmark_ln)
 end
 
 function M.get_all_annot(parent_buf_path)
-    local annots = annots_tbl:get({
+    local annots = M.annots_tbl:get({
         select = {
             'buf_full_path',
             'extmark_ln',
@@ -49,7 +40,7 @@ end
 
 function M.create_annot(parent_buf_path, extmark_ln, annot)
     local annot_concat = table.concat(annot, '``')
-    annots_tbl:insert({
+    M.annots_tbl:insert({
         buf_full_path = parent_buf_path,
         extmark_ln = extmark_ln,
         text = annot_concat,
@@ -58,7 +49,7 @@ end
 
 function M.updt_annot(parent_buf_path, extmark_ln, annot)
     local annot_concat = table.concat(annot, '``')
-    annots_tbl:update({
+    M.annots_tbl:update({
         set = {
             text = annot_concat,
         },
@@ -70,7 +61,7 @@ function M.updt_annot(parent_buf_path, extmark_ln, annot)
 end
 
 function M.updt_annot_pos(parent_buf_path, old_extmark_ln, new_extmark_ln)
-    annots_tbl:update({
+    M.annots_tbl:update({
         set = {
             extmark_ln = new_extmark_ln,
         },
@@ -82,7 +73,7 @@ function M.updt_annot_pos(parent_buf_path, old_extmark_ln, new_extmark_ln)
 end
 
 function M.del_annot(parent_buf_path, extmark_ln)
-    annots_tbl:remove({
+    M.annots_tbl:remove({
         where = {
             buf_full_path = parent_buf_path,
             extmark_ln = extmark_ln,
