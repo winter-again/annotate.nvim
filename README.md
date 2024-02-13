@@ -1,6 +1,7 @@
 # annotate.nvim
 
-**Please note that this plugin is still WIP & unstable. Feel free to open an issue with any bugs or implementation suggestions.**
+> [!NOTE]
+> This repo will be archived on 2024-02-23. There remain some bugs and I may make some additional changes before the aforementioned date, but I don't have the motivation to continue working on this plugin.
 
 A plugin for creating and storing notes (annotations) related to a line of code/text. It uses Neovim's extended marks and a [SQLite database](https://github.com/kkharji/sqlite.lua) to store annotation information.
 
