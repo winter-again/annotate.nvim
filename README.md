@@ -34,6 +34,10 @@ With [folke/lazy.nvim](https://github.com/folke/lazy.nvim)
  }
 ```
 
+## Migrating note line separator character
+
+Previously, I'd been using "\`\`" as a separator when concatenating and reconstructing notes that span multiple lines. However, I've changed this to use "\\n" instead. To update all existing notes to use the new character separator, use `require('annotate').migrate_annotation_char_sep()`. 
+
 ## Functions
 
 Map these to some keybinding:

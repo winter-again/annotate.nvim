@@ -43,11 +43,9 @@ local function create_annot_buf(cursor_ln)
     return annot_buf, annot_win
 end
 
--- TODO: test this gmatch with weirder cases?
--- TODO: consider things like stripping leading/trailing whitespaces?
 local function build_annot(annot_txt)
     local annot_lines = {}
-    for line in string.gmatch(annot_txt .. '``', '([^``]*)``') do
+    for line in string.gmatch(annot_txt .. '\\n', '(.-)\\n') do
         table.insert(annot_lines, line)
     end
     return annot_lines
@@ -217,7 +215,7 @@ function M.create_annotation()
                         sign_text = M.config.annot_sign,
                         sign_hl_group = M.config.annot_sign_hl,
                     })
-                    print('Modified annotation. is_updt: ', is_updt)
+                    -- print('Modified annotation. is_updt: ', is_updt)
                 else
                     db.create_annot(parent_buf_path, cursor_ln, buf_txt)
                     local new_mark_id = vim.api.nvim_buf_set_extmark(extmark_parent_buf, ns, cursor_ln, 0, {
@@ -288,6 +286,10 @@ function M.delete_annotation()
             end
         end)
     end
+end
+
+function M.migrate_annotation_char_sep()
+    db.migrate_annot_char_sep()
 end
 
 -- TODO: is there a better way to specify/config hl? or did we set a sensible default at least
